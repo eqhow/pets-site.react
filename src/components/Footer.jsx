@@ -4,6 +4,8 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
+import { Link } from 'react-router-dom';
+
 function Footer(props) {
     return (
 <footer className="text-white py-4">
@@ -17,31 +19,15 @@ function Footer(props) {
         <h5>Навигация</h5>
         <ul className="list-unstyled">
           <li>
-            <a
-              href="#"
-              className="text-white text-decoration-none"
-              onclick="showPage('home')"
-            >
-              Главная
-            </a>
+            <a href="#" className="text-white text-decoration-none"> </a>
+            <Link className="text-white text-decoration-none" to={'/'}> Главная </Link>
           </li>
           <li>
-            <a
-              href="#"
-              className="text-white text-decoration-none"
-              onclick="showPage('search')"
-            >
-              Поиск животных
-            </a>
+            <Link className="text-white text-decoration-none" to={'/advancedsearch'}> Расширенный поиск </Link>
           </li>
           <li>
-            <a
-              href="#"
-              className="text-white text-decoration-none"
-              onclick="showPage('add-pet')"
-            >
-              Добавить объявление
-            </a>
+            <a href="#" className="text-white text-decoration-none" onclick="showPage('add-pet')"> </a>
+          // здесь линк для добавить объявление        
           </li>
         </ul>
       </div>

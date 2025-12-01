@@ -71,14 +71,6 @@ footer {
     margin-top: auto;
 }
 
-.page {
-    display: none;
-}
-
-.active-page {
-    display: block;
-}
-
 .form-control:focus {
     border-color: var(--accent-color);
     box-shadow: 0 0 0 0.2rem rgba(76, 201, 240, 0.25);

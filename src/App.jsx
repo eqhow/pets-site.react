@@ -9,17 +9,17 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
-import {Routes, Route} from react-router-dom;
+import {Routes, Route} from "react-router-dom";
 
 function App() {
   return (
     <>
-    <Routes>
-      <Route path={"./components/pages/AdvancedSearch.jsx"} element={<AdvancedSearch/>}/>
-    </Routes>
-
     <Header />
-    <Main />
+
+    <Routes>
+      <Route path={"/"} element={<Main />} />
+      <Route path={"/advancedsearch"} element={<AdvancedSearch />}/>
+    </Routes>
     <Footer />
     </>
   );
