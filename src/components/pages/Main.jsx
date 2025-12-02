@@ -161,12 +161,7 @@ function Home(props) {
         </div>
       </div>
       <div className="text-center mt-4">
-        <button
-          className="btn btn-primary btn-animated"
-          onclick="showPage('search')"
-        >
-          Смотреть все объявления
-        </button>
+          <Link className="btn btn-primary btn-animated" to={'/advancedsearch'}> Смотреть все объявления </Link> 
       </div>
     </section>
     {/* Подписка на новости */}

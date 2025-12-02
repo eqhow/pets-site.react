@@ -57,27 +57,20 @@ function Header(props) {
                   </button>
                   <div className="quick-search-results" id="quick-search-results" />
                 </div>
-                <div className="nav-item dropdown">
-                  <a
-                    className="nav-link dropdown-toggle d-flex align-items-center"
-                    href="#"
-                    id="navbarDropdown"
-                    role="button"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false"
-                  >
-                    <i className="bi bi-person-circle me-1" /> Аккаунт
-                  </a>
-                  <ul
-                    className="dropdown-menu dropdown-menu-end"
-                    id="account-dropdown"
-                  >
-                    {/* Динамически заполняется в JavaScript */}
-                  </ul>
+                    <div class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center show" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="true">
+                            <i class="bi bi-person-circle me-1"></i> Аккаунт
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end show" id="account-dropdown" data-bs-popper="static">
+                    <li><a class="dropdown-item">
+                    <Link className="dropdown-item" class="bi bi-box-arrow-in-right me-2" to={'/sign-in'}> Вход </Link> </a> </li>
+                    <li><a class="dropdown-item">
+                    <Link className="dropdown-item" class="bi bi-person-plus me-2" to={'/registration'}> Регистрация </Link> </a> </li>
+                    </ul>
+                    </div>
+                </div>
                 </div>
               </div>
-            </div>
-          </div>
         </nav>
       </>
     );
