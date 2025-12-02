@@ -13,7 +13,7 @@ function Home(props) {
     {/* Слайдер с успешными историями */}
     <br />
     <section className="container mb-5">
-      <h2 className="section-title">Успешные воссоединения</h2>
+      <h2 className="section-title">Недавно вернулись домой</h2>
       <div
         id="successStoriesCarousel"
         className="carousel slide"
@@ -97,7 +97,7 @@ function Home(props) {
     </section>
     {/* Карточки недавно найденных животных */}
     <section className="container mb-5">
-      <h2 className="section-title">Недавно найденные животные</h2>
+      <h2 className="section-title">Их ждут дома</h2>
       <div className="row g-4">
         <div className="col-md-6 col-lg-4">
           <div className="card h-100">

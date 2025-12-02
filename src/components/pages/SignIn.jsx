@@ -3,6 +3,9 @@ import React from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
+import { Link } from 'react-router-dom';
+import Registration from './Registration';
+
 function SignIn(props) {
     return (
         <div id="login" className="page fade-in active-page">
@@ -58,9 +61,7 @@ function SignIn(props) {
                 Войти
               </button>
               <div className="text-center">
-                <a href="#" onclick="showPage('registration')">
-                  Нет аккаунта? Зарегистрируйтесь
-                </a>
+                <Link className = "text-center" to="/registration"> Нет аккаунта? Зарегистрируйтесь </Link>
               </div>
             </form>
           </div>
