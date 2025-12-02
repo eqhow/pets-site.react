@@ -25,6 +25,9 @@ function Header(props) {
               type="button"
               data-bs-toggle="collapse"
               data-bs-target="#navbarNav"
+              aria-controls="navbarNav"
+              aria-expanded="false"
+              aria-label="Toggle navigation"
             >
               <span className="navbar-toggler-icon" />
             </button>
@@ -57,20 +60,33 @@ function Header(props) {
                   </button>
                   <div className="quick-search-results" id="quick-search-results" />
                 </div>
-                    <div class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle d-flex align-items-center show" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="true">
-                            <i class="bi bi-person-circle me-1"></i> Аккаунт
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end show" id="account-dropdown" data-bs-popper="static">
-                    <li><a class="dropdown-item">
-                    <Link className="dropdown-item" class="bi bi-box-arrow-in-right me-2" to={'/sign-in'}> Вход </Link> </a> </li>
-                    <li><a class="dropdown-item">
-                    <Link className="dropdown-item" class="bi bi-person-plus me-2" to={'/registration'}> Регистрация </Link> </a> </li>
-                    </ul>
-                    </div>
-                </div>
+                <div className="nav-item dropdown">
+                  <a 
+                    className="nav-link dropdown-toggle d-flex align-items-center" 
+                    href="#" 
+                    id="navbarDropdown" 
+                    role="button" 
+                    data-bs-toggle="dropdown" 
+                    aria-expanded="false"
+                  >
+                    <i className="bi bi-person-circle me-1"></i> Аккаунт
+                  </a>
+                  <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                    <li>
+                      <Link className="dropdown-item" to={'/sign-in'}>
+                        <i className="bi bi-box-arrow-in-right me-2"></i> Вход
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to={'/registration'}>
+                        <i className="bi bi-person-plus me-2"></i> Регистрация
+                      </Link>
+                    </li>
+                  </ul>
                 </div>
               </div>
+            </div>
+          </div>
         </nav>
       </>
     );
