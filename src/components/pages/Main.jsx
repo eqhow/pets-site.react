@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { AuthContext, PetsContext, AlertContext } from '../../App';
+import { PetsContext, AlertContext } from '../../App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
@@ -36,6 +36,28 @@ function Home() {
   // Последние 3 животные для отображения
   const recentPets = allPets.slice(0, 3);
 
+  // Данные для слайдера (успешные истории)
+  const successStories = [
+    {
+      id: 1,
+      title: "Мурка вернулась домой",
+      description: "После 2 недель поисков кошка Мурка была найдена и вернулась к своей семье.",
+      image: "https://i.postimg.cc/PJQQXm8x/murka.jpg" // Замените на реальные пути
+    },
+    {
+      id: 2,
+      title: "Бадди снова с хозяином",
+      description: "Собака породы лабрадор была найдена через 5 дней после пропажи.",
+      image: "https://i.postimg.cc/KzZrWpY6/labrador.jpg"
+    },
+    {
+      id: 3,
+      title: "Симба нашел новый дом",
+      description: "Котенок был найден на улице и теперь обрел любящую семью.",
+      image: "https://i.postimg.cc/W1x33D36/simba.jpg"
+    }
+  ];
+
   return (
     <div className="main-content">
       <div id="home" className="page active-page fade-in">
@@ -48,7 +70,56 @@ function Home() {
             className="carousel slide"
             data-bs-ride="carousel"
           >
-            {/* ... карусель ... */}
+            <div className="carousel-indicators">
+              {successStories.map((story, index) => (
+                <button
+                  key={story.id}
+                  type="button"
+                  data-bs-target="#successStoriesCarousel"
+                  data-bs-slide-to={index}
+                  className={index === 0 ? "active" : ""}
+                  aria-current={index === 0 ? "true" : "false"}
+                  aria-label={`Slide ${index + 1}`}
+                ></button>
+              ))}
+            </div>
+            <div className="carousel-inner rounded-3">
+              {successStories.map((story, index) => (
+                <div 
+                  key={story.id} 
+                  className={`carousel-item ${index === 0 ? "active" : ""}`}
+                >
+                  <img
+                    src={story.image}
+                    className="d-block w-100"
+                    alt={story.title}
+                    style={{ height: "400px", objectFit: "cover" }}
+                  />
+                  <div className="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded-3 p-3">
+                    <h5>{story.title}</h5>
+                    <p>{story.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              className="carousel-control-prev"
+              type="button"
+              data-bs-target="#successStoriesCarousel"
+              data-bs-slide="prev"
+            >
+              <span className="carousel-control-prev-icon" aria-hidden="true"></span>
+              <span className="visually-hidden">Предыдущий</span>
+            </button>
+            <button
+              className="carousel-control-next"
+              type="button"
+              data-bs-target="#successStoriesCarousel"
+              data-bs-slide="next"
+            >
+              <span className="carousel-control-next-icon" aria-hidden="true"></span>
+              <span className="visually-hidden">Следующий</span>
+            </button>
           </div>
         </section>
         
@@ -63,6 +134,7 @@ function Home() {
                     src={pet.image}
                     className="card-img-top pet-card-img"
                     alt={pet.kind}
+                    style={{ height: "200px", objectFit: "cover" }}
                   />
                   <div className="card-body">
                     <h5 className="card-title">{pet.kind}</h5>
@@ -71,6 +143,14 @@ function Home() {
                       <small className="text-muted">Найден: {pet.date}</small>
                       <span className="badge bg-primary">{pet.kind}</span>
                     </div>
+                  </div>
+                  <div className="card-footer bg-transparent border-0">
+                    <Link 
+                      to={`/pet/${pet.id}`} 
+                      className="btn btn-outline-primary btn-sm w-100"
+                    >
+                      Подробнее
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -96,6 +176,7 @@ function Home() {
                   <form
                     className="row g-2 justify-content-center"
                     onSubmit={handleSubscribe}
+                    noValidate
                   >
                     <div className="col-md-8">
                       <input
@@ -103,7 +184,15 @@ function Home() {
                         className={`form-control ${emailError ? 'is-invalid' : ''}`}
                         placeholder="Ваш email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (emailError) setEmailError("");
+                        }}
+                        onBlur={() => {
+                          if (!/\S+@\S+\.\S+/.test(email) && email.trim()) {
+                            setEmailError("Пожалуйста, введите корректный email");
+                          }
+                        }}
                         required
                       />
                       {emailError && (
