@@ -1,9 +1,11 @@
-import React, { useState, useContext, useMemo } from 'react';
+// AdvancedSearch.jsx
+import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { AuthContext, PetsContext, AlertContext } from '../../App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link } from 'react-router-dom';
+import { api } from '../../api';
 
 function AdvancedSearch() {
   const { 
@@ -12,14 +14,19 @@ function AdvancedSearch() {
     pagination, 
     filterPets, 
     resetFilters, 
-    setCurrentPage 
+    setCurrentPage,
+    loadPets
   } = useContext(PetsContext);
+  
+  const { showAlert } = useContext(AlertContext);
   
   // Локальное состояние формы
   const [formValues, setFormValues] = useState({
     district: filters.district || '',
     kind: filters.kind || ''
   });
+
+  const [loading, setLoading] = useState(false);
 
   // Обработчик изменения формы
   const handleInputChange = (e) => {
@@ -31,9 +38,17 @@ function AdvancedSearch() {
   };
 
   // Обработчик отправки формы
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    filterPets(formValues);
+    setLoading(true);
+    
+    try {
+      await filterPets(formValues);
+    } catch (error) {
+      showAlert('Ошибка поиска', 'danger');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Обработчик сброса
@@ -42,7 +57,7 @@ function AdvancedSearch() {
     resetFilters();
   };
 
-  // Расчет отображаемых животных
+  // Расчет отображаемых животных с пагинацией
   const displayedPets = useMemo(() => {
     const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
     const endIndex = startIndex + pagination.itemsPerPage;
@@ -75,7 +90,22 @@ function AdvancedSearch() {
                     <option value="">Все районы</option>
                     <option value="Адмиралтейский">Адмиралтейский</option>
                     <option value="Василеостровский">Василеостровский</option>
-                    {/* ... остальные районы ... */}
+                    <option value="Выборгский">Выборгский</option>
+                    <option value="Калининский">Калининский</option>
+                    <option value="Кировский">Кировский</option>
+                    <option value="Колпинский">Колпинский</option>
+                    <option value="Красногвардейский">Красногвардейский</option>
+                    <option value="Красносельский">Красносельский</option>
+                    <option value="Кронштадтский">Кронштадтский</option>
+                    <option value="Курортный">Курортный</option>
+                    <option value="Московский">Московский</option>
+                    <option value="Невский">Невский</option>
+                    <option value="Петроградский">Петроградский</option>
+                    <option value="Петродворцовый">Петродворцовый</option>
+                    <option value="Приморский">Приморский</option>
+                    <option value="Пушкинский">Пушкинский</option>
+                    <option value="Фрунзенский">Фрунзенский</option>
+                    <option value="Центральный">Центральный</option>
                   </select>
                 </div>
                 <div className="col-md-6">
@@ -92,9 +122,22 @@ function AdvancedSearch() {
                   />
                 </div>
                 <div className="col-12">
-                  <button type="submit" className="btn btn-primary btn-animated me-2">
-                    <i className="bi bi-search me-2" />
-                    Найти
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-animated me-2"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Поиск...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-search me-2" />
+                        Найти
+                      </>
+                    )}
                   </button>
                   <button 
                     type="button" 
@@ -111,7 +154,13 @@ function AdvancedSearch() {
 
         {/* Блок с состоянием поиска */}
         <div id="search-state">
-          {filteredPets.length === 0 && !formValues.district && !formValues.kind ? (
+          {loading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Загрузка...</span>
+              </div>
+            </div>
+          ) : filteredPets.length === 0 && !formValues.district && !formValues.kind ? (
             <div className="text-center py-5" id="initial-state">
               <div className="mb-4">
                 <i className="bi bi-search display-1 text-muted" />
@@ -144,16 +193,17 @@ function AdvancedSearch() {
                   <div className="col-md-6 col-lg-4" key={pet.id}>
                     <div className="card h-100">
                       <img
-                        src={pet.image}
+                        src={pet.image || pet.photos?.[0] || 'https://via.placeholder.com/300x200'}
                         className="card-img-top pet-card-img"
                         alt={pet.kind}
+                        style={{ height: "200px", objectFit: "cover" }}
                       />
                       <div className="card-body">
                         <h5 className="card-title">{pet.kind}</h5>
                         <p className="card-text">{pet.description}</p>
                         <div className="d-flex justify-content-between align-items-center">
                           <small className="text-muted">Найден: {pet.date}</small>
-                          <span className="badge bg-primary">{pet.kind}</span>
+                          <span className="badge bg-primary">{pet.district}</span>
                         </div>
                       </div>
                       <div className="card-footer bg-transparent">

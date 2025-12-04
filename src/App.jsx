@@ -1,4 +1,4 @@
-import React, { createContext, useState } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import Main from './components/pages/Main';
 import Footer from './components/Footer';
@@ -8,45 +8,35 @@ import SignIn from './components/pages/SignIn';
 import Registration from './components/pages/Registration';
 import Profile from './components/pages/Profile';
 import Card from './components/pages/Card';
-
+import AlertComponent from './components/AlertComponent';
 import './assets/css/style.css';
-
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
-
 import { Routes, Route } from "react-router-dom";
+import { api } from './api';
 
-// Контекст для авторизации
+// Контексты
 export const AuthContext = createContext(null);
-// Контекст для животных
 export const PetsContext = createContext(null);
-// Контекст для уведомлений
 export const AlertContext = createContext(null);
-
-// Мок-данные для животных (можно вынести в отдельный файл)
-const mockPets = [
-  { id: 1, kind: 'Собака', district: 'Центральный', description: 'Найдена собака, рыжего окраса, среднего размера, очень дружелюбный.', date: '15.06.2025', image: 'https://i.postimg.cc/Hkkmpdh8/pes-ryzij.jpg' },
-  { id: 2, kind: 'Кошка', district: 'Василеостровский', description: 'Найдена кошка, пушистая, серая с белым, приучена к лотку.', date: '12.06.2025', image: 'https://i.postimg.cc/vHWT1YhK/koska-seraa.jpg' },
-  { id: 3, kind: 'Птица', district: 'Адмиралтейский', description: 'Найден попугай, волнистый попугай голубого окраса, умеет говорить несколько слов.', date: '10.06.2025', image: 'https://i.postimg.cc/L527NVdk/popugaj.jpg' },
-  // ... остальные животные
-];
 
 function App() {
   // Состояние авторизации
   const [auth, setAuth] = useState(() => {
-    const savedUser = localStorage.getItem('findpets_current_user');
+    const token = localStorage.getItem('authToken');
+    const userData = localStorage.getItem('userData');
     return {
-      isLoggedIn: !!savedUser,
-      user: savedUser ? JSON.parse(savedUser) : null,
-      users: JSON.parse(localStorage.getItem('findpets_users')) || []
+      isLoggedIn: !!token,
+      token: token,
+      user: userData ? JSON.parse(userData) : null,
     };
   });
 
   // Состояние животных
   const [pets, setPets] = useState({
-    allPets: mockPets,
+    allPets: [],
+    sliderPets: [],
     filteredPets: [],
-    currentPet: null,
     filters: { district: '', kind: '' },
     pagination: { currentPage: 1, itemsPerPage: 6, totalPages: 0 }
   });
@@ -54,124 +44,157 @@ function App() {
   // Состояние уведомлений
   const [alerts, setAlerts] = useState([]);
 
-  // Функции авторизации
-  const registerUser = (userData) => {
-    // Проверка на существующего пользователя
-    if (auth.users.find(user => user.email === userData.email)) {
-      showAlert('Пользователь с таким email уже существует', 'danger');
-      return false;
+  // Загрузка животных
+  useEffect(() => {
+    loadPets();
+  }, []);
+
+  const loadPets = async () => {
+    try {
+      // Загружаем слайдер
+      const sliderResponse = await api.getSlider();
+      const sliderPets = sliderResponse.data?.pets || [];
+
+      // Загружаем все животные
+      const petsResponse = await api.getPets();
+      const allPets = petsResponse.data?.orders || [];
+
+      // Сортируем по дате (сначала новые)
+      const sortedPets = [...allPets].sort((a, b) => 
+        new Date(b.date.split('-').reverse().join('-')) - new Date(a.date.split('-').reverse().join('-'))
+      );
+
+      setPets(prev => ({
+        ...prev,
+        allPets: sortedPets,
+        sliderPets: sliderPets,
+        filteredPets: sortedPets,
+      }));
+    } catch (error) {
+      showAlert('Ошибка загрузки данных', 'danger');
     }
-    
-    if (auth.users.find(user => user.phone === userData.phone)) {
-      showAlert('Пользователь с таким номером телефона уже существует', 'danger');
-      return false;
-    }
-
-    const newUser = {
-      ...userData,
-      id: Date.now(),
-      registrationDate: new Date().toISOString()
-    };
-
-    const updatedUsers = [...auth.users, newUser];
-    localStorage.setItem('findpets_users', JSON.stringify(updatedUsers));
-    
-    setAuth(prev => ({
-      ...prev,
-      users: updatedUsers
-    }));
-
-    showAlert('Регистрация прошла успешно', 'success');
-    return true;
   };
 
-  const loginUser = (identifier, password) => {
-    const user = auth.users.find(user => 
-      (user.email === identifier || user.phone === identifier) && 
-      user.password === password
-    );
+  // Функции авторизации
+  const loginUser = async (identifier, password) => {
+    try {
+      const response = await api.login({
+        email: identifier,
+        password: password
+      });
+      
+      if (response.data?.token) {
+        localStorage.setItem('authToken', response.data.token);
+        // Получаем информацию о пользователе
+        // В реальном API нужно декодировать токен или запросить /api/users/current
+        const userData = {
+          id: 1, // Временное значение, нужно получить из API
+          name: identifier.includes('@') ? 'Пользователь' : 'Пользователь',
+          phone: identifier,
+          email: identifier.includes('@') ? identifier : null,
+          registrationDate: new Date().toISOString()
+        };
+        
+        localStorage.setItem('userData', JSON.stringify(userData));
+        
+        setAuth({
+          isLoggedIn: true,
+          token: response.data.token,
+          user: userData,
+        });
+        
+        showAlert('Вход выполнен успешно', 'success');
+        return true;
+      }
+    } catch (error) {
+      showAlert('Неверный логин или пароль', 'danger');
+      return false;
+    }
+  };
 
-    if (user) {
-      localStorage.setItem('findpets_current_user', JSON.stringify(user));
-      setAuth(prev => ({
-        ...prev,
-        isLoggedIn: true,
-        user
-      }));
-      showAlert('Вход выполнен успешно', 'success');
+  const registerUser = async (userData) => {
+    try {
+      await api.register({
+        name: userData.name,
+        phone: userData.phone,
+        email: userData.email,
+        password: userData.password,
+        password_confirmation: userData.password,
+        confirm: userData.agree ? 1 : 0
+      });
+      
+      showAlert('Регистрация прошла успешно', 'success');
       return true;
-    } else {
-      showAlert('Неверный email/телефон или пароль', 'danger');
+    } catch (error) {
+      showAlert('Ошибка регистрации: ' + error.message, 'danger');
       return false;
     }
   };
 
   const logoutUser = () => {
-    localStorage.removeItem('findpets_current_user');
-    setAuth(prev => ({
-      ...prev,
-      isLoggedIn: false,
-      user: null
-    }));
-    showAlert('Вы успешно вышли из аккаунта', 'info');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+    setAuth({ isLoggedIn: false, token: null, user: null });
+    showAlert('Вы вышли из системы', 'info');
   };
 
-  const updateUser = (updates) => {
-    const updatedUsers = auth.users.map(user => 
-      user.id === auth.user.id ? { ...user, ...updates } : user
-    );
+  const updateUser = async (updates) => {
+    if (!auth.user) return;
     
-    const updatedUser = { ...auth.user, ...updates };
-    
-    localStorage.setItem('findpets_users', JSON.stringify(updatedUsers));
-    localStorage.setItem('findpets_current_user', JSON.stringify(updatedUser));
-    
-    setAuth(prev => ({
-      ...prev,
-      users: updatedUsers,
-      user: updatedUser
-    }));
-    
-    showAlert('Данные обновлены', 'success');
+    try {
+      if (updates.phone) {
+        await api.updatePhone(auth.user.id, updates.phone);
+      }
+      if (updates.email) {
+        await api.updateEmail(auth.user.id, updates.email);
+      }
+      
+      const updatedUser = { ...auth.user, ...updates };
+      localStorage.setItem('userData', JSON.stringify(updatedUser));
+      setAuth(prev => ({ ...prev, user: updatedUser }));
+      
+      showAlert('Данные обновлены', 'success');
+    } catch (error) {
+      showAlert('Ошибка обновления данных: ' + error.message, 'danger');
+    }
   };
 
   // Функции для животных
-  const filterPets = (filters) => {
-    const filtered = mockPets.filter(pet => {
-      const districtMatch = !filters.district || pet.district === filters.district;
-      const kindMatch = !filters.kind || 
-        pet.kind.toLowerCase().includes(filters.kind.toLowerCase()) ||
-        pet.description.toLowerCase().includes(filters.kind.toLowerCase());
-      return districtMatch && kindMatch;
-    });
+  const filterPets = useCallback(async (filters) => {
+    try {
+      const params = {};
+      if (filters.district) params.district = filters.district;
+      if (filters.kind) params.kind = filters.kind;
+      
+      const response = await api.advancedSearch(params);
+      const filtered = response.data?.orders || [];
+      
+      setPets(prev => ({
+        ...prev,
+        filteredPets: filtered,
+        filters,
+        pagination: { ...prev.pagination, currentPage: 1 }
+      }));
+    } catch (error) {
+      showAlert('Ошибка поиска', 'danger');
+    }
+  }, []);
 
+  const resetFilters = useCallback(() => {
     setPets(prev => ({
       ...prev,
-      filteredPets: filtered,
-      filters,
-      pagination: { ...prev.pagination, currentPage: 1 }
-    }));
-  };
-
-  const resetFilters = () => {
-    setPets(prev => ({
-      ...prev,
-      filteredPets: [],
+      filteredPets: prev.allPets,
       filters: { district: '', kind: '' },
       pagination: { ...prev.pagination, currentPage: 1 }
     }));
-  };
+  }, []);
 
-  const setCurrentPet = (pet) => {
-    setPets(prev => ({ ...prev, currentPet: pet }));
-  };
-
-  const setCurrentPage = (page) => {
+  const setCurrentPage = useCallback((page) => {
     setPets(prev => ({
       ...prev,
       pagination: { ...prev.pagination, currentPage: page }
     }));
-  };
+  }, []);
 
   // Функции для уведомлений
   const showAlert = (message, type = 'danger') => {
@@ -183,12 +206,11 @@ function App() {
     }, 5000);
   };
 
-  // Значения контекстов
   const authContextValue = {
     ...auth,
-    registerUser,
     loginUser,
     logoutUser,
+    registerUser,
     updateUser
   };
 
@@ -196,8 +218,8 @@ function App() {
     ...pets,
     filterPets,
     resetFilters,
-    setCurrentPet,
-    setCurrentPage
+    setCurrentPage,
+    loadPets
   };
 
   const alertContextValue = {
@@ -223,6 +245,7 @@ function App() {
               </Routes>
             </main>
             <Footer />
+            <AlertComponent />
           </div>
         </AlertContext.Provider>
       </PetsContext.Provider>

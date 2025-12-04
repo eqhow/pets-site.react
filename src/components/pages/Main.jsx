@@ -1,20 +1,33 @@
-import React, { useState, useContext } from 'react';
-import { PetsContext, AlertContext } from '../../App';
+import React, { useState, useContext, useEffect } from 'react';
+import { PetsContext, AlertContext } from '../../App'; // Изменено
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link } from "react-router-dom";
+import { api } from '../../api'; // Изменено
 
 function Home() {
-  const { allPets } = useContext(PetsContext);
+  const { sliderPets, allPets, loadPets } = useContext(PetsContext);
   const { showAlert } = useContext(AlertContext);
+  const [recentPets, setRecentPets] = useState([]);
   
   // Состояние для подписки
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
+  
+
+  // Получаем последние 6 животных
+  useEffect(() => {
+    if (allPets.length > 0) {
+      const sorted = [...allPets]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 6);
+      setRecentPets(sorted);
+    }
+  }, [allPets]);
 
   // Обработчик подписки
-  const handleSubscribe = (e) => {
+  const handleSubscribe = async (e) => {
     e.preventDefault();
     
     if (!email.trim()) {
@@ -27,36 +40,18 @@ function Home() {
       return;
     }
     
-    // Отправка подписки (здесь будет API вызов)
-    showAlert("Вы успешно подписались на новости!", "success");
-    setEmail("");
-    setEmailError("");
+    try {
+      await api.subscribe({ email });
+      showAlert("Вы успешно подписались на новости!", "success");
+      setEmail("");
+      setEmailError("");
+    } catch (error) {
+      showAlert(error.message, 'danger');
+    }
   };
 
-  // Последние 3 животные для отображения
-  const recentPets = allPets.slice(0, 3);
-
-  // Данные для слайдера (успешные истории)
-  const successStories = [
-    {
-      id: 1,
-      title: "Мурка вернулась домой",
-      description: "После 2 недель поисков кошка Мурка была найдена и вернулась к своей семье.",
-      image: "https://i.postimg.cc/PJQQXm8x/murka.jpg" // Замените на реальные пути
-    },
-    {
-      id: 2,
-      title: "Бадди снова с хозяином",
-      description: "Собака породы лабрадор была найдена через 5 дней после пропажи.",
-      image: "https://i.postimg.cc/KzZrWpY6/labrador.jpg"
-    },
-    {
-      id: 3,
-      title: "Симба нашел новый дом",
-      description: "Котенок был найден на улице и теперь обрел любящую семью.",
-      image: "https://i.postimg.cc/W1x33D36/simba.jpg"
-    }
-  ];
+  // Если нет слайдера, показываем заглушку
+  const hasSlider = sliderPets && sliderPets.length > 0;
 
   return (
     <div className="main-content">
@@ -65,62 +60,68 @@ function Home() {
         <br />
         <section className="container mb-5">
           <h2 className="section-title">Недавно вернулись домой</h2>
-          <div
-            id="successStoriesCarousel"
-            className="carousel slide"
-            data-bs-ride="carousel"
-          >
-            <div className="carousel-indicators">
-              {successStories.map((story, index) => (
-                <button
-                  key={story.id}
-                  type="button"
-                  data-bs-target="#successStoriesCarousel"
-                  data-bs-slide-to={index}
-                  className={index === 0 ? "active" : ""}
-                  aria-current={index === 0 ? "true" : "false"}
-                  aria-label={`Slide ${index + 1}`}
-                ></button>
-              ))}
-            </div>
-            <div className="carousel-inner rounded-3">
-              {successStories.map((story, index) => (
-                <div 
-                  key={story.id} 
-                  className={`carousel-item ${index === 0 ? "active" : ""}`}
-                >
-                  <img
-                    src={story.image}
-                    className="d-block w-100"
-                    alt={story.title}
-                    style={{ height: "400px", objectFit: "cover" }}
-                  />
-                  <div className="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded-3 p-3">
-                    <h5>{story.title}</h5>
-                    <p>{story.description}</p>
+          {hasSlider ? (
+            <div
+              id="successStoriesCarousel"
+              className="carousel slide"
+              data-bs-ride="carousel"
+            >
+              <div className="carousel-indicators">
+                {sliderPets.map((story, index) => (
+                  <button
+                    key={story.id}
+                    type="button"
+                    data-bs-target="#successStoriesCarousel"
+                    data-bs-slide-to={index}
+                    className={index === 0 ? "active" : ""}
+                    aria-current={index === 0 ? "true" : "false"}
+                    aria-label={`Slide ${index + 1}`}
+                  ></button>
+                ))}
+              </div>
+              <div className="carousel-inner rounded-3">
+                {sliderPets.map((story, index) => (
+                  <div 
+                    key={story.id} 
+                    className={`carousel-item ${index === 0 ? "active" : ""}`}
+                  >
+                    <img
+                      src={story.image || story.photos?.[0] || 'https://pets.сделай.site/storage/images/'}
+                      className="d-block w-100"
+                      alt={story.kind}
+                      style={{ height: "400px", objectFit: "cover" }}
+                    />
+                    <div className="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded-3 p-3">
+                      <h5>{story.kind}</h5>
+                      <p>{story.description}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <button
+                className="carousel-control-prev"
+                type="button"
+                data-bs-target="#successStoriesCarousel"
+                data-bs-slide="prev"
+              >
+                <span className="carousel-control-prev-icon" aria-hidden="true"></span>
+                <span className="visually-hidden">Предыдущий</span>
+              </button>
+              <button
+                className="carousel-control-next"
+                type="button"
+                data-bs-target="#successStoriesCarousel"
+                data-bs-slide="next"
+              >
+                <span className="carousel-control-next-icon" aria-hidden="true"></span>
+                <span className="visually-hidden">Следующий</span>
+              </button>
             </div>
-            <button
-              className="carousel-control-prev"
-              type="button"
-              data-bs-target="#successStoriesCarousel"
-              data-bs-slide="prev"
-            >
-              <span className="carousel-control-prev-icon" aria-hidden="true"></span>
-              <span className="visually-hidden">Предыдущий</span>
-            </button>
-            <button
-              className="carousel-control-next"
-              type="button"
-              data-bs-target="#successStoriesCarousel"
-              data-bs-slide="next"
-            >
-              <span className="carousel-control-next-icon" aria-hidden="true"></span>
-              <span className="visually-hidden">Следующий</span>
-            </button>
-          </div>
+          ) : (
+            <div className="text-center py-5 bg-light rounded-3">
+              <p className="text-muted">Нет данных для слайдера</p>
+            </div>
+          )}
         </section>
         
         {/* Карточки недавно найденных животных */}
@@ -131,7 +132,7 @@ function Home() {
               <div className="col-md-6 col-lg-4" key={pet.id}>
                 <div className="card h-100">
                   <img
-                    src={pet.image}
+                    src={pet.image || pet.photos?.[0] || 'https://via.placeholder.com/300x200'}
                     className="card-img-top pet-card-img"
                     alt={pet.kind}
                     style={{ height: "200px", objectFit: "cover" }}
@@ -187,11 +188,6 @@ function Home() {
                         onChange={(e) => {
                           setEmail(e.target.value);
                           if (emailError) setEmailError("");
-                        }}
-                        onBlur={() => {
-                          if (!/\S+@\S+\.\S+/.test(email) && email.trim()) {
-                            setEmailError("Пожалуйста, введите корректный email");
-                          }
                         }}
                         required
                       />

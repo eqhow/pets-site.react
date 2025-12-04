@@ -1,8 +1,9 @@
 import React, { useState, useContext } from 'react';
-import { AuthContext, PetsContext, AlertContext } from '../../App';
+import { AuthContext, AlertContext } from '../../App'; // Изменено
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link, useNavigate } from "react-router-dom";
+import { api } from '../../api'; // Изменено
 
 function Registration() {
   const { registerUser } = useContext(AuthContext);
@@ -21,6 +22,7 @@ function Registration() {
 
   // Состояние ошибок валидации
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false); // Добавьте эту строку
 
   // Валидация имени
   const validateName = (name) => {
@@ -99,15 +101,23 @@ function Registration() {
       return;
     }
 
+    setLoading(true); // Добавьте это
     const userData = {
       name: formData.name,
       phone: formData.phone,
       email: formData.email,
-      password: formData.password
+      password: formData.password,
+      confirm: formData.agree ? 1 : 0
     };
 
-    if (registerUser(userData)) {
-      navigate('/sign-in');
+    try {
+      if (await registerUser(userData)) {
+        navigate('/sign-in');
+      }
+    } catch (error) {
+      showAlert('Ошибка регистрации', 'danger');
+    } finally {
+      setLoading(false); // Добавьте это
     }
   };
 
@@ -264,8 +274,9 @@ function Registration() {
                       <button
                         type="submit"
                         className="btn btn-primary w-100 btn-animated"
+                        disabled={loading}
                       >
-                        Зарегистрироваться
+                        {loading ? 'Регистрация...' : 'Зарегистрироваться'}
                       </button>
                     </div>
                     

@@ -1,30 +1,72 @@
-import React, { useState, useContext } from 'react';
-import { AuthContext, PetsContext, AlertContext } from '../../App';
+import React, { useState, useContext, useEffect } from 'react';
+import { AuthContext, AlertContext } from '../../App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { useNavigate } from "react-router-dom";
+import { api } from '../../api';
 
 function Profile() {
   const { user, updateUser, logoutUser } = useContext(AuthContext);
   const { showAlert } = useContext(AlertContext);
   const navigate = useNavigate();
 
-  // Мок-данные объявлений пользователя
-  const [userPets, setUserPets] = useState([
-    { id: 1, title: 'Найдена кошка, порода Сфинкс', district: 'Василеостровский', date: '01-06-2025', status: 'moderation' },
-    { id: 2, title: 'Найдена собака, порода Лабрадор', district: 'Центральный', date: '15-05-2025', status: 'active' },
-    { id: 3, title: 'Найден попугай, волнистый', district: 'Адмиралтейский', date: '10-04-2025', status: 'found' },
-    { id: 4, title: 'Найдена кошка, рыжая', district: 'Фрунзенский', date: '22-03-2025', status: 'archive' },
-  ]);
-
-  // Состояние для форм редактирования
-  const [editPhone, setEditPhone] = useState(user?.phone || '');
-  const [editEmail, setEditEmail] = useState(user?.email || '');
+  const [userPets, setUserPets] = useState([]);
+  const [userInfo, setUserInfo] = useState(null);
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      navigate('/sign-in');
+    } else {
+      setEditPhone(user.phone || '');
+      setEditEmail(user.email || '');
+      loadUserData();
+      loadUserOrders();
+    }
+  }, [user, navigate]);
+
+  const loadUserData = async () => {
+    try {
+      // Загрузка данных пользователя из API
+      // В реальном API нужно будет получить ID пользователя из токена
+      // const response = await api.getUser(user.id);
+      // setUserInfo(response.data?.user?.[0]);
+      
+      // Пока используем данные из контекста
+      setUserInfo(user);
+    } catch (error) {
+      console.error('Ошибка загрузки данных пользователя:', error);
+    }
+  };
+
+  const loadUserOrders = async () => {
+    try {
+      setLoading(true);
+      // Загрузка объявлений пользователя
+      // В реальном API: const response = await api.getUserOrders(user.id);
+      // setUserPets(response.data?.orders || []);
+      
+      // Пока используем мок-данные
+      const mockPets = [
+        { id: 1, kind: 'Кошка', title: 'Найдена кошка, порода Сфинкс', district: 'Василеостровский', date: '01-06-2025', status: 'moderation' },
+        { id: 2, kind: 'Собака', title: 'Найдена собака, порода Лабрадор', district: 'Центральный', date: '15-05-2025', status: 'active' },
+      ];
+      setUserPets(mockPets);
+    } catch (error) {
+      showAlert('Ошибка загрузки объявлений', 'danger');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Расчет периода регистрации
   const getRegistrationPeriod = (registrationDate) => {
+    if (!registrationDate) return 'Неизвестно';
+    
     const regDate = new Date(registrationDate);
     const now = new Date();
     
@@ -56,7 +98,7 @@ function Profile() {
   };
 
   // Обработчик изменения телефона
-  const handlePhoneSubmit = (e) => {
+  const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     
     const phoneRegex = /^[\+\d]+$/;
@@ -69,12 +111,18 @@ function Profile() {
       return;
     }
     
-    updateUser({ phone: editPhone });
-    setPhoneError('');
+    try {
+      // В реальном API: await api.updatePhone(user.id, editPhone);
+      updateUser({ phone: editPhone });
+      setPhoneError('');
+      showAlert('Телефон успешно обновлен', 'success');
+    } catch (error) {
+      showAlert('Ошибка обновления телефона', 'danger');
+    }
   };
 
   // Обработчик изменения email
-  const handleEmailSubmit = (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
     
     const emailRegex = /\S+@\S+\.\S+/;
@@ -87,8 +135,14 @@ function Profile() {
       return;
     }
     
-    updateUser({ email: editEmail });
-    setEmailError('');
+    try {
+      // В реальном API: await api.updateEmail(user.id, editEmail);
+      updateUser({ email: editEmail });
+      setEmailError('');
+      showAlert('Email успешно обновлен', 'success');
+    } catch (error) {
+      showAlert('Ошибка обновления email', 'danger');
+    }
   };
 
   // Обработчик выхода
@@ -100,17 +154,21 @@ function Profile() {
   };
 
   // Обработчик удаления объявления
-  const handleDeletePet = (id) => {
+  const handleDeletePet = async (id) => {
     if (window.confirm('Вы уверены, что хотите удалить это объявление?')) {
-      setUserPets(prev => prev.filter(pet => pet.id !== id));
-      showAlert('Объявление успешно удалено!', 'success');
+      try {
+        // В реальном API: await api.deleteOrder(id);
+        setUserPets(prev => prev.filter(pet => pet.id !== id));
+        showAlert('Объявление успешно удалено!', 'success');
+      } catch (error) {
+        showAlert('Ошибка удаления объявления', 'danger');
+      }
     }
   };
 
   // Обработчик редактирования объявления
   const handleEditPet = (id) => {
     navigate(`/edit-pet/${id}`);
-    // Здесь будет переход на страницу редактирования
   };
 
   // Статусы объявлений
@@ -122,8 +180,7 @@ function Profile() {
   };
 
   if (!user) {
-    navigate('/sign-in');
-    return null;
+    return null; // или индикатор загрузки
   }
 
   return (
@@ -228,47 +285,57 @@ function Profile() {
               <div className="card-body">
                 <h5 className="card-title">Мои объявления</h5>
                 
-                <div className="list-group list-group-flush">
-                  {userPets.map(pet => {
-                    const status = statusConfig[pet.status];
-                    const isDisabled = ['found', 'archive'].includes(pet.status);
-                    
-                    return (
-                      <div 
-                        className="list-group-item d-flex justify-content-between align-items-center" 
-                        key={pet.id}
-                      >
-                        <div>
-                          <h6>{pet.title}</h6>
-                          <small className="text-muted">
-                            Район: {pet.district} | Дата: {pet.date}
-                          </small>
-                        </div>
-                        <div>
-                          <span className={`badge badge-status ${status.className}`}>
-                            {status.text}
-                          </span>
-                          <div className="btn-group btn-group-sm ms-2">
-                            <button
-                              className={`btn ${isDisabled ? 'btn-outline-secondary' : 'btn-outline-primary'} btn-animated`}
-                              onClick={() => !isDisabled && handleEditPet(pet.id)}
-                              disabled={isDisabled}
-                            >
-                              Редактировать
-                            </button>
-                            <button
-                              className={`btn ${isDisabled ? 'btn-outline-secondary' : 'btn-outline-danger'} btn-animated`}
-                              onClick={() => !isDisabled && handleDeletePet(pet.id)}
-                              disabled={isDisabled}
-                            >
-                              Удалить
-                            </button>
+                {loading ? (
+                  <div className="text-center py-3">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Загрузка...</span>
+                    </div>
+                  </div>
+                ) : userPets.length === 0 ? (
+                  <p className="text-center text-muted">У вас нет объявлений</p>
+                ) : (
+                  <div className="list-group list-group-flush">
+                    {userPets.map(pet => {
+                      const status = statusConfig[pet.status] || { text: 'Неизвестно', className: 'badge-secondary' };
+                      const isDisabled = ['found', 'archive'].includes(pet.status);
+                      
+                      return (
+                        <div 
+                          className="list-group-item d-flex justify-content-between align-items-center" 
+                          key={pet.id}
+                        >
+                          <div>
+                            <h6>{pet.title || `Найдена ${pet.kind}`}</h6>
+                            <small className="text-muted">
+                              Район: {pet.district} | Дата: {pet.date}
+                            </small>
+                          </div>
+                          <div>
+                            <span className={`badge badge-status ${status.className}`}>
+                              {status.text}
+                            </span>
+                            <div className="btn-group btn-group-sm ms-2">
+                              <button
+                                className={`btn ${isDisabled ? 'btn-outline-secondary' : 'btn-outline-primary'} btn-animated`}
+                                onClick={() => !isDisabled && handleEditPet(pet.id)}
+                                disabled={isDisabled}
+                              >
+                                Редактировать
+                              </button>
+                              <button
+                                className={`btn ${isDisabled ? 'btn-outline-secondary' : 'btn-outline-danger'} btn-animated`}
+                                onClick={() => !isDisabled && handleDeletePet(pet.id)}
+                                disabled={isDisabled}
+                              >
+                                Удалить
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -278,4 +345,4 @@ function Profile() {
   );
 }
 
-export default Profile;
+export default Profile; // ВАЖНО: это должно быть здесь

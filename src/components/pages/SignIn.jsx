@@ -1,11 +1,12 @@
 import React, { useState, useContext } from 'react';
-import { AuthContext, PetsContext, AlertContext } from '../../App';
+import { AuthContext, AlertContext } from '../../App'; // Изменено
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link, useNavigate } from 'react-router-dom';
 
 function SignIn() {
   const { loginUser } = useContext(AuthContext);
+  const { showAlert } = useContext(AlertContext);
   const navigate = useNavigate();
   
   // Состояние формы
@@ -17,6 +18,7 @@ function SignIn() {
   
   // Состояние ошибок
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false); // Добавьте это
 
   // Обработчик изменения полей
   const handleInputChange = (e) => {
@@ -49,21 +51,28 @@ function SignIn() {
   };
 
   // Обработчик отправки формы
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) {
       return;
     }
     
-    if (loginUser(formData.identifier, formData.password)) {
-      navigate('/profile');
-      
-      // Сохранение в localStorage если выбрано "Запомнить меня"
-      if (formData.remember) {
-        localStorage.setItem('findpets_remember_login', 'true');
-        localStorage.setItem('findpets_last_identifier', formData.identifier);
+    setLoading(true); // Добавьте это
+    try {
+      if (await loginUser(formData.identifier, formData.password)) {
+        navigate('/profile');
+        
+        // Сохранение в localStorage если выбрано "Запомнить меня"
+        if (formData.remember) {
+          localStorage.setItem('findpets_remember_login', 'true');
+          localStorage.setItem('findpets_last_identifier', formData.identifier);
+        }
       }
+    } catch (error) {
+      showAlert('Ошибка входа', 'danger');
+    } finally {
+      setLoading(false); // Добавьте это
     }
   };
 
@@ -140,8 +149,9 @@ function SignIn() {
                   <button
                     type="submit"
                     className="btn btn-primary w-100 mb-3 btn-animated"
+                    disabled={loading}
                   >
-                    Войти
+                    {loading ? 'Вход...' : 'Войти'}
                   </button>
                   
                   <div className="text-center">
