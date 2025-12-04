@@ -13,7 +13,7 @@ import './assets/css/style.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Routes, Route } from "react-router-dom";
-import { api } from './api';
+import { api, processPetData } from './api';
 
 // Контексты
 export const AuthContext = createContext(null);
@@ -53,22 +53,32 @@ function App() {
     try {
       // Загружаем слайдер
       const sliderResponse = await api.getSlider();
-      const sliderPets = sliderResponse.data?.pets || [];
+      const sliderPets = (sliderResponse.data?.pets || []).map(processPetData);
 
       // Загружаем все животные
       const petsResponse = await api.getPets();
-      const allPets = petsResponse.data?.orders || [];
+      const allPets = (petsResponse.data?.orders || []).map(processPetData);
 
       // Сортируем по дате (сначала новые)
-      const sortedPets = [...allPets].sort((a, b) => 
-        new Date(b.date.split('-').reverse().join('-')) - new Date(a.date.split('-').reverse().join('-'))
-      );
+      const sortedPets = [...allPets].sort((a, b) => {
+        try {
+          const dateA = new Date(b.date.split('-').reverse().join('-'));
+          const dateB = new Date(a.date.split('-').reverse().join('-'));
+          return dateA - dateB;
+        } catch {
+          return 0;
+        }
+      });
 
       setPets(prev => ({
         ...prev,
         allPets: sortedPets,
         sliderPets: sliderPets,
         filteredPets: sortedPets,
+        pagination: {
+          ...prev.pagination,
+          totalPages: Math.ceil(sortedPets.length / prev.pagination.itemsPerPage)
+        }
       }));
     } catch (error) {
       showAlert('Ошибка загрузки данных', 'danger');
@@ -88,10 +98,10 @@ function App() {
         // Получаем информацию о пользователе
         // В реальном API нужно декодировать токен или запросить /api/users/current
         const userData = {
-          id: 1, // Временное значение, нужно получить из API
-          name: identifier.includes('@') ? 'Пользователь' : 'Пользователь',
-          phone: identifier,
-          email: identifier.includes('@') ? identifier : null,
+          id: response.data.user?.id || 1,
+          name: response.data.user?.name || 'Пользователь',
+          phone: response.data.user?.phone || identifier,
+          email: response.data.user?.email || (identifier.includes('@') ? identifier : null),
           registrationDate: new Date().toISOString()
         };
         
@@ -114,7 +124,7 @@ function App() {
 
   const registerUser = async (userData) => {
     try {
-      await api.register({
+      const response = await api.register({
         name: userData.name,
         phone: userData.phone,
         email: userData.email,
@@ -167,13 +177,17 @@ function App() {
       if (filters.kind) params.kind = filters.kind;
       
       const response = await api.advancedSearch(params);
-      const filtered = response.data?.orders || [];
+      const filtered = (response.data?.orders || []).map(processPetData);
       
       setPets(prev => ({
         ...prev,
         filteredPets: filtered,
         filters,
-        pagination: { ...prev.pagination, currentPage: 1 }
+        pagination: {
+          ...prev.pagination,
+          currentPage: 1,
+          totalPages: Math.ceil(filtered.length / prev.pagination.itemsPerPage)
+        }
       }));
     } catch (error) {
       showAlert('Ошибка поиска', 'danger');
@@ -185,7 +199,11 @@ function App() {
       ...prev,
       filteredPets: prev.allPets,
       filters: { district: '', kind: '' },
-      pagination: { ...prev.pagination, currentPage: 1 }
+      pagination: {
+        ...prev.pagination,
+        currentPage: 1,
+        totalPages: Math.ceil(prev.allPets.length / prev.pagination.itemsPerPage)
+      }
     }));
   }, []);
 

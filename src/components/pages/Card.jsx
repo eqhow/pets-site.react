@@ -1,10 +1,9 @@
-// Card.jsx
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext, AlertContext } from '../../App';
 import { useParams, useNavigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
-import { api } from '../../api';
+import { api, getImageUrl } from '../../api';
 
 function Card() {
   const { id } = useParams();
@@ -25,31 +24,53 @@ function Card() {
     try {
       setLoading(true);
       const response = await api.getPet(id);
-      const petData = response.data?.pet?.[0];
+      console.log('Pet data:', response); // Для отладки
       
-      if (petData) {
-        setPet(petData);
-        
-        // Загружаем похожих животных
-        try {
-          const allPetsResponse = await api.getPets();
-          const allPets = allPetsResponse.data?.orders || [];
-          
-          const similar = allPets
-            .filter(p => p.id !== petData.id && p.kind === petData.kind)
-            .slice(0, 3);
-          
-          setSimilarPets(similar);
-        } catch (error) {
-          console.error('Ошибка загрузки похожих животных:', error);
-        }
+      // Обрабатываем разные форматы ответа
+      let petData = null;
+      
+      if (response.data?.pet?.[0]) {
+        petData = response.data.pet[0];
+      } else if (response.data?.pet) {
+        petData = response.data.pet;
+      } else if (response.data?.order) {
+        petData = response.data.order;
       } else {
-        showAlert('Животное не найдено', 'danger');
-        navigate('/');
+        throw new Error('Данные животного не найдены');
+      }
+      
+      // Обрабатываем изображения
+      const processedPet = {
+        ...petData,
+        image: getImageUrl(petData.image),
+        photos: petData.photos?.map(photo => getImageUrl(photo)) || []
+      };
+      
+      setPet(processedPet);
+      
+      // Загружаем похожих животных
+      try {
+        const allPetsResponse = await api.getPets();
+        const allPets = allPetsResponse.data?.orders || [];
+        
+        const processedAllPets = allPets.map(p => ({
+          ...p,
+          image: getImageUrl(p.image),
+          photos: p.photos?.map(photo => getImageUrl(photo)) || []
+        }));
+        
+        const similar = processedAllPets
+          .filter(p => p.id !== petData.id && p.kind === petData.kind)
+          .slice(0, 3);
+        
+        setSimilarPets(similar);
+      } catch (error) {
+        console.error('Ошибка загрузки похожих животных:', error);
       }
     } catch (error) {
-      showAlert('Ошибка загрузки данных: ' + error.message, 'danger');
-      navigate('/');
+      console.error('Ошибка загрузки животного:', error);
+      showAlert('Животное не найдено или произошла ошибка', 'danger');
+      setTimeout(() => navigate('/'), 2000);
     } finally {
       setLoading(false);
     }
@@ -86,10 +107,25 @@ function Card() {
   }
 
   if (!pet) {
-    return null;
+    return (
+      <div className="page fade-in">
+        <div className="container my-5">
+          <div className="text-center">
+            <h3>Животное не найдено</h3>
+            <button className="btn btn-primary mt-3" onClick={() => navigate('/')}>
+              Вернуться на главную
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  const photos = pet.photos || [pet.image].filter(Boolean);
+  const photos = pet.photos && pet.photos.length > 0 
+    ? pet.photos 
+    : pet.image 
+      ? [pet.image] 
+      : ['https://via.placeholder.com/600x400?text=Нет+фото'];
 
   return (
     <div id="pet-card" className="page fade-in">
@@ -122,6 +158,9 @@ function Card() {
                         className="d-block w-100"
                         alt={`${pet.kind} фото ${index + 1}`}
                         style={{ height: 400, objectFit: "cover" }}
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/600x400?text=Нет+фото';
+                        }}
                       />
                     </div>
                   ))}
@@ -149,7 +188,7 @@ function Card() {
             <div className="card">
               <div className="card-body">
                 <h3 className="card-title">{pet.kind}</h3>
-                <p className="card-text">{pet.description}</p>
+                <p className="card-text">{pet.description || 'Описание отсутствует'}</p>
                 
                 <div className="row mt-4">
                   <div className="col-md-6">
@@ -169,11 +208,11 @@ function Card() {
                       </li>
                       <li className="list-group-item d-flex justify-content-between">
                         <span>Район:</span>
-                        <span>{pet.district}</span>
+                        <span>{pet.district || 'Не указано'}</span>
                       </li>
                       <li className="list-group-item d-flex justify-content-between">
                         <span>Дата находки:</span>
-                        <span>{pet.date}</span>
+                        <span>{pet.date || 'Не указано'}</span>
                       </li>
                     </ul>
                   </div>
@@ -194,11 +233,14 @@ function Card() {
                       </li>
                       <li className="list-group-item d-flex justify-content-between">
                         <span>Статус объявления:</span>
-                        <span className="badge badge-moderation">
+                        <span className={`badge ${pet.status === 'onModeration' ? 'bg-warning' : 
+                           pet.status === 'active' ? 'bg-success' : 
+                           pet.status === 'wasFound' ? 'bg-info' : 
+                           pet.status === 'archive' ? 'bg-secondary' : 'bg-dark'}`}>
                           {pet.status === 'onModeration' ? 'На модерации' : 
                            pet.status === 'active' ? 'Активное' : 
                            pet.status === 'wasFound' ? 'Хозяин найден' : 
-                           pet.status === 'archive' ? 'В архиве' : 'Неизвестно'}
+                           pet.status === 'archive' ? 'В архиве' : pet.status || 'Неизвестно'}
                         </span>
                       </li>
                     </ul>

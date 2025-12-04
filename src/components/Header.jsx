@@ -5,6 +5,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link, useNavigate } from "react-router-dom";
 import { NavDropdown } from 'react-bootstrap';
+import { getImageUrl } from '../api';
 
 function Header() {
   const { isLoggedIn, user, logoutUser } = useContext(AuthContext);
@@ -25,9 +26,9 @@ function Header() {
     }
 
     const filtered = allPets.filter(pet =>
-      pet.kind.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pet.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pet.district.toLowerCase().includes(searchTerm.toLowerCase())
+      pet.kind?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      pet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      pet.district?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     setSearchResults(filtered.slice(0, 5));
@@ -103,6 +104,7 @@ function Header() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onFocus={() => searchTerm.trim() && setShowResults(true)}
+                  onBlur={() => setTimeout(() => setShowResults(false), 200)}
                 />
                 <button
                   className="btn btn-outline-primary search-btn-custom"
@@ -113,26 +115,38 @@ function Header() {
                 </button>
                 {showResults && searchResults.length > 0 && (
                   <div className="quick-search-results" style={{ display: 'block' }}>
-                    {searchResults.map(pet => (
-                      <div
-                        key={pet.id}
-                        className="quick-search-item"
-                        onClick={() => {
-                          navigate(`/pet/${pet.id}`);
-                          setShowResults(false);
-                        }}
-                      >
-                        <img src={pet.image} alt={pet.kind} />
-                        <div className="quick-search-item-info">
-                          <div className="quick-search-item-title">{pet.kind}</div>
-                          <div className="quick-search-item-meta">{pet.district} • {pet.date}</div>
+                    {searchResults.map(pet => {
+                      const imageUrl = getImageUrl(pet.image) || 
+                                     (pet.photos && pet.photos.length > 0 ? getImageUrl(pet.photos[0]) : null) ||
+                                     'https://via.placeholder.com/50x50?text=Нет+фото';
+                      
+                      return (
+                        <div
+                          key={pet.id}
+                          className="quick-search-item"
+                          onClick={() => {
+                            navigate(`/pet/${pet.id}`);
+                            setShowResults(false);
+                          }}
+                        >
+                          <img 
+                            src={imageUrl} 
+                            alt={pet.kind}
+                            onError={(e) => {
+                              e.target.src = 'https://via.placeholder.com/50x50?text=Нет+фото';
+                            }}
+                          />
+                          <div className="quick-search-item-info">
+                            <div className="quick-search-item-title">{pet.kind}</div>
+                            <div className="quick-search-item-meta">{pet.district} • {pet.date}</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {allPets.filter(pet =>
-                      pet.kind.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      pet.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      pet.district.toLowerCase().includes(searchTerm.toLowerCase())
+                      pet.kind?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      pet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      pet.district?.toLowerCase().includes(searchTerm.toLowerCase())
                     ).length > 5 && (
                       <div
                         className="quick-search-item text-center"
@@ -141,9 +155,9 @@ function Header() {
                         <small className="text-primary">
                           Показать все результаты ({
                             allPets.filter(pet =>
-                              pet.kind.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              pet.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              pet.district.toLowerCase().includes(searchTerm.toLowerCase())
+                              pet.kind?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              pet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              pet.district?.toLowerCase().includes(searchTerm.toLowerCase())
                             ).length
                           })
                         </small>
@@ -168,7 +182,7 @@ function Header() {
               >
                 {isLoggedIn ? (
                   <>
-                    <NavDropdown.Header>Здравствуйте, {user.name}!</NavDropdown.Header>
+                    <NavDropdown.Header>Здравствуйте, {user?.name}!</NavDropdown.Header>
                     <NavDropdown.Divider />
                     <NavDropdown.Item as={Link} to="/profile">
                       <i className="bi bi-person me-2"></i>Профиль

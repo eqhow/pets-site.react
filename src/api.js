@@ -1,7 +1,48 @@
 // src/api.js
 const API_BASE_URL = 'https://pets.xn--80ahdri7a.site/api';
+const IMAGE_BASE_URL = 'https://pets.xn--80ahdri7a.site/storage/images';
 
+// Вспомогательная функция для получения полного URL изображения
+export const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  
+  // Если уже полный URL
+  if (imagePath.startsWith('http')) {
+    return imagePath;
+  }
+  
+  // Если путь начинается с /storage/images, убираем эту часть
+  if (imagePath.startsWith('/storage/images/')) {
+    return `https://pets.xn--80ahdri7a.site${imagePath}`;
+  }
+  
+  // Если просто имя файла
+  return `${IMAGE_BASE_URL}/${imagePath}`;
+};
 
+// Функция для обработки данных животных (добавление полных URL изображений)
+export const processPetData = (pet) => {
+  if (!pet) return pet;
+  
+  const processed = { ...pet };
+  
+  // Обработка основного изображения
+  if (pet.image) {
+    processed.image = getImageUrl(pet.image);
+  }
+  
+  // Обработка массива фотографий
+  if (pet.photos && Array.isArray(pet.photos)) {
+    processed.photos = pet.photos.map(photo => getImageUrl(photo));
+  }
+  
+  // Если нет ни image, ни photos, добавляем заглушку
+  if (!processed.image && (!processed.photos || processed.photos.length === 0)) {
+    processed.image = 'https://via.placeholder.com/300x200?text=Нет+фото';
+  }
+  
+  return processed;
+};
 
 // Функция для запросов с авторизацией
 async function fetchAPI(endpoint, options = {}) {

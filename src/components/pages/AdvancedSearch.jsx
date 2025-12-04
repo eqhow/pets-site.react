@@ -5,7 +5,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link } from 'react-router-dom';
-import { api } from '../../api';
+import { api, getImageUrl } from '../../api';
 
 function AdvancedSearch() {
   const { 
@@ -66,6 +66,51 @@ function AdvancedSearch() {
 
   // Расчет пагинации
   const totalPages = Math.ceil(filteredPets.length / pagination.itemsPerPage);
+
+  // Функция для отображения ограниченного количества страниц
+  const getPaginationItems = () => {
+    const items = [];
+    const maxVisible = 5; // Максимальное количество видимых страниц
+    
+    if (totalPages <= maxVisible) {
+      // Если страниц мало, показываем все
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(i);
+      }
+    } else {
+      // Логика для ограниченного отображения
+      const leftSibling = Math.max(pagination.currentPage - 1, 1);
+      const rightSibling = Math.min(pagination.currentPage + 1, totalPages);
+      
+      const shouldShowLeftDots = leftSibling > 2;
+      const shouldShowRightDots = rightSibling < totalPages - 1;
+      
+      // Первая страница
+      items.push(1);
+      
+      if (shouldShowLeftDots) {
+        items.push('...');
+      }
+      
+      // Страницы вокруг текущей
+      for (let i = leftSibling; i <= rightSibling; i++) {
+        if (i > 1 && i < totalPages) {
+          items.push(i);
+        }
+      }
+      
+      if (shouldShowRightDots) {
+        items.push('...');
+      }
+      
+      // Последняя страница
+      if (totalPages > 1) {
+        items.push(totalPages);
+      }
+    }
+    
+    return items;
+  };
 
   return (
     <div id="search" className="page fade-in">
@@ -189,34 +234,43 @@ function AdvancedSearch() {
             <div id="search-results-container">
               <h3 className="mb-3">Результаты поиска ({filteredPets.length})</h3>
               <div className="row g-4" id="search-results">
-                {displayedPets.map(pet => (
-                  <div className="col-md-6 col-lg-4" key={pet.id}>
-                    <div className="card h-100">
-                      <img
-                        src={pet.image || pet.photos?.[0] || 'https://via.placeholder.com/300x200'}
-                        className="card-img-top pet-card-img"
-                        alt={pet.kind}
-                        style={{ height: "200px", objectFit: "cover" }}
-                      />
-                      <div className="card-body">
-                        <h5 className="card-title">{pet.kind}</h5>
-                        <p className="card-text">{pet.description}</p>
-                        <div className="d-flex justify-content-between align-items-center">
-                          <small className="text-muted">Найден: {pet.date}</small>
-                          <span className="badge bg-primary">{pet.district}</span>
+                {displayedPets.map(pet => {
+                  const imageUrl = getImageUrl(pet.image) || 
+                                 (pet.photos && pet.photos.length > 0 ? getImageUrl(pet.photos[0]) : null) ||
+                                 'https://via.placeholder.com/300x200?text=Нет+фото';
+                  
+                  return (
+                    <div className="col-md-6 col-lg-4" key={pet.id}>
+                      <div className="card h-100">
+                        <img
+                          src={imageUrl}
+                          className="card-img-top pet-card-img"
+                          alt={pet.kind}
+                          style={{ height: "200px", objectFit: "cover" }}
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/300x200?text=Нет+фото';
+                          }}
+                        />
+                        <div className="card-body">
+                          <h5 className="card-title">{pet.kind}</h5>
+                          <p className="card-text">{pet.description}</p>
+                          <div className="d-flex justify-content-between align-items-center">
+                            <small className="text-muted">Найден: {pet.date}</small>
+                            <span className="badge bg-primary">{pet.district}</span>
+                          </div>
+                        </div>
+                        <div className="card-footer bg-transparent">
+                          <Link 
+                            to={`/pet/${pet.id}`}
+                            className="btn btn-outline-primary btn-sm w-100 btn-animated"
+                          >
+                            Подробнее
+                          </Link>
                         </div>
                       </div>
-                      <div className="card-footer bg-transparent">
-                        <Link 
-                          to={`/pet/${pet.id}`}
-                          className="btn btn-outline-primary btn-sm w-100 btn-animated"
-                        >
-                          Подробнее
-                        </Link>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Пагинация */}
@@ -229,26 +283,29 @@ function AdvancedSearch() {
                         onClick={() => setCurrentPage(pagination.currentPage - 1)}
                         disabled={pagination.currentPage === 1}
                       >
-                        Предыдущая
+                        <i className="bi bi-chevron-left"></i>
                       </button>
                     </li>
                     
-                    {[...Array(totalPages)].map((_, index) => {
-                      const pageNumber = index + 1;
-                      return (
+                    {getPaginationItems().map((item, index) => (
+                      item === '...' ? (
+                        <li key={`dots-${index}`} className="page-item disabled">
+                          <span className="page-link">...</span>
+                        </li>
+                      ) : (
                         <li 
-                          key={pageNumber}
-                          className={`page-item ${pagination.currentPage === pageNumber ? 'active' : ''}`}
+                          key={item}
+                          className={`page-item ${pagination.currentPage === item ? 'active' : ''}`}
                         >
                           <button
                             className="page-link"
-                            onClick={() => setCurrentPage(pageNumber)}
+                            onClick={() => setCurrentPage(item)}
                           >
-                            {pageNumber}
+                            {item}
                           </button>
                         </li>
-                      );
-                    })}
+                      )
+                    ))}
                     
                     <li className={`page-item ${pagination.currentPage === totalPages ? 'disabled' : ''}`}>
                       <button
@@ -256,10 +313,13 @@ function AdvancedSearch() {
                         onClick={() => setCurrentPage(pagination.currentPage + 1)}
                         disabled={pagination.currentPage === totalPages}
                       >
-                        Следующая
+                        <i className="bi bi-chevron-right"></i>
                       </button>
                     </li>
                   </ul>
+                  <div className="text-center text-muted mt-2">
+                    Страница {pagination.currentPage} из {totalPages}
+                  </div>
                 </nav>
               )}
             </div>

@@ -1,10 +1,10 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { PetsContext, AlertContext } from '../../App'; // Изменено
+import { PetsContext, AlertContext } from '../../App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link } from "react-router-dom";
-import { api } from '../../api'; // Изменено
+import { api, getImageUrl } from '../../api';
 
 function Home() {
   const { sliderPets, allPets, loadPets } = useContext(PetsContext);
@@ -80,23 +80,32 @@ function Home() {
                 ))}
               </div>
               <div className="carousel-inner rounded-3">
-                {sliderPets.map((story, index) => (
-                  <div 
-                    key={story.id} 
-                    className={`carousel-item ${index === 0 ? "active" : ""}`}
-                  >
-                    <img
-                      src={story.image || story.photos?.[0] || 'https://pets.сделай.site/storage/images/'}
-                      className="d-block w-100"
-                      alt={story.kind}
-                      style={{ height: "400px", objectFit: "cover" }}
-                    />
-                    <div className="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded-3 p-3">
-                      <h5>{story.kind}</h5>
-                      <p>{story.description}</p>
+                {sliderPets.map((story, index) => {
+                  const imageUrl = getImageUrl(story.image) || 
+                                 (story.photos && story.photos.length > 0 ? getImageUrl(story.photos[0]) : null) ||
+                                 'https://via.placeholder.com/800x400?text=Нет+фото';
+                  
+                  return (
+                    <div 
+                      key={story.id} 
+                      className={`carousel-item ${index === 0 ? "active" : ""}`}
+                    >
+                      <img
+                        src={imageUrl}
+                        className="d-block w-100"
+                        alt={story.kind}
+                        style={{ height: "400px", objectFit: "cover" }}
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/800x400?text=Нет+фото';
+                        }}
+                      />
+                      <div className="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded-3 p-3">
+                        <h5>{story.kind}</h5>
+                        <p>{story.description}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <button
                 className="carousel-control-prev"
@@ -119,7 +128,9 @@ function Home() {
             </div>
           ) : (
             <div className="text-center py-5 bg-light rounded-3">
-              <p className="text-muted">Нет данных для слайдера</p>
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Загрузка...</span>
+              </div>
             </div>
           )}
         </section>
@@ -128,34 +139,43 @@ function Home() {
         <section className="container mb-5">
           <h2 className="section-title">Их ждут дома</h2>
           <div className="row g-4">
-            {recentPets.map(pet => (
-              <div className="col-md-6 col-lg-4" key={pet.id}>
-                <div className="card h-100">
-                  <img
-                    src={pet.image || pet.photos?.[0] || 'https://via.placeholder.com/300x200'}
-                    className="card-img-top pet-card-img"
-                    alt={pet.kind}
-                    style={{ height: "200px", objectFit: "cover" }}
-                  />
-                  <div className="card-body">
-                    <h5 className="card-title">{pet.kind}</h5>
-                    <p className="card-text">{pet.description}</p>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <small className="text-muted">Найден: {pet.date}</small>
-                      <span className="badge bg-primary">{pet.kind}</span>
+            {recentPets.map(pet => {
+              const imageUrl = getImageUrl(pet.image) || 
+                             (pet.photos && pet.photos.length > 0 ? getImageUrl(pet.photos[0]) : null) ||
+                             'https://via.placeholder.com/300x200?text=Нет+фото';
+              
+              return (
+                <div className="col-md-6 col-lg-4" key={pet.id}>
+                  <div className="card h-100">
+                    <img
+                      src={imageUrl}
+                      className="card-img-top pet-card-img"
+                      alt={pet.kind}
+                      style={{ height: "200px", objectFit: "cover" }}
+                      onError={(e) => {
+                        e.target.src = 'https://via.placeholder.com/300x200?text=Нет+фото';
+                      }}
+                    />
+                    <div className="card-body">
+                      <h5 className="card-title">{pet.kind}</h5>
+                      <p className="card-text">{pet.description}</p>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <small className="text-muted">Найден: {pet.date}</small>
+                        <span className="badge bg-primary">{pet.district}</span>
+                      </div>
+                    </div>
+                    <div className="card-footer bg-transparent border-0">
+                      <Link 
+                        to={`/pet/${pet.id}`} 
+                        className="btn btn-outline-primary btn-sm w-100"
+                      >
+                        Подробнее
+                      </Link>
                     </div>
                   </div>
-                  <div className="card-footer bg-transparent border-0">
-                    <Link 
-                      to={`/pet/${pet.id}`} 
-                      className="btn btn-outline-primary btn-sm w-100"
-                    >
-                      Подробнее
-                    </Link>
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="text-center mt-4">
             <Link className="btn btn-primary btn-animated" to="/advancedsearch">
