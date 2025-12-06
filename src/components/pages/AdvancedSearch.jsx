@@ -4,10 +4,7 @@ import { PetsContext, AlertContext } from '../../App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
-import { getImageUrl } from '../../api'; // Добавляем getImageUrl обратно
 import PetCard from '../PetCard';
-
-debugger;
 
 function AdvancedSearch() {
   const { 
@@ -55,17 +52,13 @@ function AdvancedSearch() {
     });
   }, [filters]);
 
-  // Функция для подготовки данных для PetCard (аналогично тому, что в Home.jsx)
+  // Функция для подготовки данных для PetCard (минимальная обработка)
   const preparePetForCard = (pet) => {
     if (!pet) return pet;
     
-    // Создаем копию, чтобы не мутировать оригинал
     const preparedPet = { ...pet };
     
-    // Убеждаемся, что есть все необходимые поля для PetCard
-    // PetCard использует: id, kind, description, date, district, photo, photos
-    
-    // Преобразуем данные как в PetCard
+    // Только базовые преобразования полей
     if (!preparedPet.kind && preparedPet.type) {
       preparedPet.kind = preparedPet.type;
     }
@@ -78,20 +71,8 @@ function AdvancedSearch() {
       preparedPet.date = preparedPet.created_at;
     }
     
-    // ВАЖНО: Не обрабатываем photo и photos здесь! 
-    // PetCard сам вызовет getImageUrl() для этих полей
-    
-    // Проверяем, что поля photo/photos есть и это строки
-    // Если их нет, PetCard сам использует заглушку
-    if (preparedPet.photo && typeof preparedPet.photo !== 'string') {
-      console.warn('Некорректный формат photo для питомца:', pet.id, pet.photo);
-      delete preparedPet.photo; // Удаляем некорректное поле
-    }
-    
-    if (preparedPet.photos && !Array.isArray(preparedPet.photos)) {
-      console.warn('Некорректный формат photos для питомца:', pet.id, pet.photos);
-      delete preparedPet.photos; // Удаляем некорректное поле
-    }
+    // Ничего не делаем с photo и photos - PetCard сам разберется
+    // Оставляем как есть, даже если это кривые данные
     
     return preparedPet;
   };
@@ -134,7 +115,7 @@ function AdvancedSearch() {
     const endIndex = startIndex + pagination.itemsPerPage;
     return filteredPets
       .slice(startIndex, endIndex)
-      .map(pet => preparePetForCard(pet)); // Подготавливаем данные
+      .map(pet => preparePetForCard(pet));
   }, [filteredPets, pagination]);
 
   // Расчет пагинации
@@ -180,17 +161,19 @@ function AdvancedSearch() {
     return items;
   };
 
-  // Отладочный вывод
+  // Отладочный вывод структуры данных
   useEffect(() => {
     if (displayedPets.length > 0) {
-      const firstPet = displayedPets[0];
-      console.log('Проверка данных питомца:', {
-        id: firstPet.id,
-        kind: firstPet.kind,
-        photo: firstPet.photo,
-        photos: firstPet.photos,
-        // Тестируем getImageUrl с этими данными
-        getImageUrlTest: firstPet.photo ? getImageUrl(firstPet.photo) : 'Нет photo'
+      const samplePet = displayedPets[0];
+      console.log('Пример данных питомца для отладки:', {
+        id: samplePet.id,
+        type: samplePet.type,
+        kind: samplePet.kind,
+        photo: samplePet.photo,
+        photos: samplePet.photos,
+        photoType: typeof samplePet.photo,
+        photosType: typeof samplePet.photos,
+        isPhotosArray: Array.isArray(samplePet.photos)
       });
     }
   }, [displayedPets]);
