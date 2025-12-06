@@ -5,26 +5,65 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link } from "react-router-dom";
 import { api, getImageUrl } from '../../api';
+import PetCard from '../PetCard';
 
 function Home() {
   const { sliderPets, allPets, loadPets } = useContext(PetsContext);
   const { showAlert } = useContext(AlertContext);
   const [recentPets, setRecentPets] = useState([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
   
   // Состояние для подписки
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   
-
-  // Получаем последние 6 животных
+  // Загружаем недавние животные
   useEffect(() => {
-    if (allPets.length > 0) {
+    const fetchRecentPets = async () => {
+      setLoadingRecent(true);
+      try {
+        // Загружаем все животные
+        const response = await api.getPets();
+        const allPetsData = response.data?.orders || [];
+        
+        // Сортируем по дате (сначала новые)
+        const sorted = [...allPetsData]
+          .sort((a, b) => {
+            try {
+              const dateA = new Date(b.created_at || b.date || 0);
+              const dateB = new Date(a.created_at || a.date || 0);
+              return dateB - dateA;
+            } catch {
+              return 0;
+            }
+          })
+          .slice(0, 6); // Берем 6 последних
+        
+        setRecentPets(sorted);
+      } catch (error) {
+        showAlert('Ошибка загрузки последних объявлений', 'danger');
+      } finally {
+        setLoadingRecent(false);
+      }
+    };
+    
+    if (allPets.length === 0) {
+      fetchRecentPets();
+    } else {
       const sorted = [...allPets]
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .sort((a, b) => {
+          try {
+            const dateA = new Date(b.created_at || b.date || 0);
+            const dateB = new Date(a.created_at || a.date || 0);
+            return dateB - dateA;
+          } catch {
+            return 0;
+          }
+        })
         .slice(0, 6);
       setRecentPets(sorted);
     }
-  }, [allPets]);
+  }, [allPets, showAlert]);
 
   // Обработчик подписки
   const handleSubscribe = async (e) => {
@@ -101,7 +140,7 @@ function Home() {
                       />
                       <div className="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded-3 p-3">
                         <h5>{story.kind}</h5>
-                        <p>{story.description}</p>
+                        <p>{story.description || story.short_description}</p>
                       </div>
                     </div>
                   );
@@ -138,50 +177,31 @@ function Home() {
         {/* Карточки недавно найденных животных */}
         <section className="container mb-5">
           <h2 className="section-title">Их ждут дома</h2>
-          <div className="row g-4">
-            {recentPets.map(pet => {
-              const imageUrl = getImageUrl(pet.image) || 
-                             (pet.photos && pet.photos.length > 0 ? getImageUrl(pet.photos[0]) : null) ||
-                             'https://via.placeholder.com/300x200?text=Нет+фото';
-              
-              return (
-                <div className="col-md-6 col-lg-4" key={pet.id}>
-                  <div className="card h-100">
-                    <img
-                      src={imageUrl}
-                      className="card-img-top pet-card-img"
-                      alt={pet.kind}
-                      style={{ height: "200px", objectFit: "cover" }}
-                      onError={(e) => {
-                        e.target.src = 'https://via.placeholder.com/300x200?text=Нет+фото';
-                      }}
-                    />
-                    <div className="card-body">
-                      <h5 className="card-title">{pet.kind}</h5>
-                      <p className="card-text">{pet.description}</p>
-                      <div className="d-flex justify-content-between align-items-center">
-                        <small className="text-muted">Найден: {pet.date}</small>
-                        <span className="badge bg-primary">{pet.district}</span>
-                      </div>
-                    </div>
-                    <div className="card-footer bg-transparent border-0">
-                      <Link 
-                        to={`/pet/${pet.id}`} 
-                        className="btn btn-outline-primary btn-sm w-100"
-                      >
-                        Подробнее
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="text-center mt-4">
-            <Link className="btn btn-primary btn-animated" to="/advancedsearch">
-              Смотреть все объявления
-            </Link>
-          </div>
+          {loadingRecent ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Загрузка...</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="row g-4">
+                {recentPets.map(pet => (
+                  <PetCard 
+                    key={pet.id} 
+                    pet={pet}
+                    noBorder={true}
+                    animatedButton={false}
+                  />
+                ))}
+              </div>
+              <div className="text-center mt-4">
+                <Link className="btn btn-primary btn-animated" to="/advancedsearch">
+                  Смотреть все объявления
+                </Link>
+              </div>
+            </>
+          )}
         </section>
 
         {/* Подписка на новости */}

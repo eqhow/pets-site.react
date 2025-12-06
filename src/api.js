@@ -41,6 +41,14 @@ export const processPetData = (pet) => {
     processed.image = 'https://via.placeholder.com/300x200?text=Нет+фото';
   }
   
+  // Форматируем дату для отображения
+  if (processed.date) {
+    // Если дата в формате ДД-ММ-ГГГГ, преобразуем в ДД.ММ.ГГГГ
+    if (processed.date.includes('-')) {
+      processed.date = processed.date.split('-').join('.');
+    }
+  }
+  
   return processed;
 };
 
@@ -116,6 +124,9 @@ export const api = {
     return fetchAPI(`/search/order${queryString ? '?' + queryString : ''}`);
   },
   
+  // Карточка животного
+  getPet: (id) => fetchAPI(`/pets/${id}`),
+  
   // Авторизация
   login: (credentials) => fetchAPI('/login', {
     method: 'POST',
@@ -143,9 +154,6 @@ export const api = {
   deleteOrder: (id) => fetchAPI(`/users/orders/${id}`, {
     method: 'DELETE',
   }),
-  
-  // Карточка животного
-  getPet: (id) => fetchAPI(`/pets/${id}`),
   
   // Добавление/редактирование животного
   addPet: (formData) => fetchAPIWithFormData('/pets/new', formData),

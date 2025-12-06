@@ -1,11 +1,13 @@
 // AdvancedSearch.jsx
 import React, { useState, useContext, useEffect, useMemo } from 'react';
-import { AuthContext, PetsContext, AlertContext } from '../../App';
+import { PetsContext, AlertContext } from '../../App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
-import { Link } from 'react-router-dom';
-import { api, getImageUrl } from '../../api';
+import { getImageUrl } from '../../api'; // Добавляем getImageUrl обратно
+import PetCard from '../PetCard';
+
+debugger;
 
 function AdvancedSearch() {
   const { 
@@ -26,7 +28,73 @@ function AdvancedSearch() {
     kind: filters.kind || ''
   });
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // При монтировании загружаем всех питомцев если еще не загружены
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (filteredPets.length === 0) {
+        try {
+          await loadPets();
+        } catch (error) {
+          showAlert('Ошибка загрузки данных', 'danger');
+        }
+      }
+      setLoading(false);
+    };
+    
+    loadInitialData();
+  }, [filteredPets.length, loadPets, showAlert]);
+
+  // Синхронизируем formValues с фильтрами из контекста
+  useEffect(() => {
+    setFormValues({
+      district: filters.district || '',
+      kind: filters.kind || ''
+    });
+  }, [filters]);
+
+  // Функция для подготовки данных для PetCard (аналогично тому, что в Home.jsx)
+  const preparePetForCard = (pet) => {
+    if (!pet) return pet;
+    
+    // Создаем копию, чтобы не мутировать оригинал
+    const preparedPet = { ...pet };
+    
+    // Убеждаемся, что есть все необходимые поля для PetCard
+    // PetCard использует: id, kind, description, date, district, photo, photos
+    
+    // Преобразуем данные как в PetCard
+    if (!preparedPet.kind && preparedPet.type) {
+      preparedPet.kind = preparedPet.type;
+    }
+    
+    if (!preparedPet.description && preparedPet.short_description) {
+      preparedPet.description = preparedPet.short_description;
+    }
+    
+    if (!preparedPet.date && preparedPet.created_at) {
+      preparedPet.date = preparedPet.created_at;
+    }
+    
+    // ВАЖНО: Не обрабатываем photo и photos здесь! 
+    // PetCard сам вызовет getImageUrl() для этих полей
+    
+    // Проверяем, что поля photo/photos есть и это строки
+    // Если их нет, PetCard сам использует заглушку
+    if (preparedPet.photo && typeof preparedPet.photo !== 'string') {
+      console.warn('Некорректный формат photo для питомца:', pet.id, pet.photo);
+      delete preparedPet.photo; // Удаляем некорректное поле
+    }
+    
+    if (preparedPet.photos && !Array.isArray(preparedPet.photos)) {
+      console.warn('Некорректный формат photos для питомца:', pet.id, pet.photos);
+      delete preparedPet.photos; // Удаляем некорректное поле
+    }
+    
+    return preparedPet;
+  };
 
   // Обработчик изменения формы
   const handleInputChange = (e) => {
@@ -41,11 +109,13 @@ function AdvancedSearch() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setHasSearched(true);
     
     try {
       await filterPets(formValues);
     } catch (error) {
-      showAlert('Ошибка поиска', 'danger');
+      showAlert('Ошибка поиска: ' + error.message, 'danger');
+      console.error('Search error:', error);
     } finally {
       setLoading(false);
     }
@@ -54,6 +124,7 @@ function AdvancedSearch() {
   // Обработчик сброса
   const handleReset = () => {
     setFormValues({ district: '', kind: '' });
+    setHasSearched(false);
     resetFilters();
   };
 
@@ -61,7 +132,9 @@ function AdvancedSearch() {
   const displayedPets = useMemo(() => {
     const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
     const endIndex = startIndex + pagination.itemsPerPage;
-    return filteredPets.slice(startIndex, endIndex);
+    return filteredPets
+      .slice(startIndex, endIndex)
+      .map(pet => preparePetForCard(pet)); // Подготавливаем данные
   }, [filteredPets, pagination]);
 
   // Расчет пагинации
@@ -70,29 +143,25 @@ function AdvancedSearch() {
   // Функция для отображения ограниченного количества страниц
   const getPaginationItems = () => {
     const items = [];
-    const maxVisible = 5; // Максимальное количество видимых страниц
+    const maxVisible = 5;
     
     if (totalPages <= maxVisible) {
-      // Если страниц мало, показываем все
       for (let i = 1; i <= totalPages; i++) {
         items.push(i);
       }
     } else {
-      // Логика для ограниченного отображения
       const leftSibling = Math.max(pagination.currentPage - 1, 1);
       const rightSibling = Math.min(pagination.currentPage + 1, totalPages);
       
       const shouldShowLeftDots = leftSibling > 2;
       const shouldShowRightDots = rightSibling < totalPages - 1;
       
-      // Первая страница
       items.push(1);
       
       if (shouldShowLeftDots) {
         items.push('...');
       }
       
-      // Страницы вокруг текущей
       for (let i = leftSibling; i <= rightSibling; i++) {
         if (i > 1 && i < totalPages) {
           items.push(i);
@@ -103,7 +172,6 @@ function AdvancedSearch() {
         items.push('...');
       }
       
-      // Последняя страница
       if (totalPages > 1) {
         items.push(totalPages);
       }
@@ -111,6 +179,21 @@ function AdvancedSearch() {
     
     return items;
   };
+
+  // Отладочный вывод
+  useEffect(() => {
+    if (displayedPets.length > 0) {
+      const firstPet = displayedPets[0];
+      console.log('Проверка данных питомца:', {
+        id: firstPet.id,
+        kind: firstPet.kind,
+        photo: firstPet.photo,
+        photos: firstPet.photos,
+        // Тестируем getImageUrl с этими данными
+        getImageUrlTest: firstPet.photo ? getImageUrl(firstPet.photo) : 'Нет photo'
+      });
+    }
+  }, [displayedPets]);
 
   return (
     <div id="search" className="page fade-in">
@@ -188,6 +271,7 @@ function AdvancedSearch() {
                     type="button" 
                     className="btn btn-outline-primary"
                     onClick={handleReset}
+                    disabled={loading}
                   >
                     Сбросить
                   </button>
@@ -204,8 +288,9 @@ function AdvancedSearch() {
               <div className="spinner-border text-primary" role="status">
                 <span className="visually-hidden">Загрузка...</span>
               </div>
+              <p className="mt-3">Загрузка...</p>
             </div>
-          ) : filteredPets.length === 0 && !formValues.district && !formValues.kind ? (
+          ) : !hasSearched && filteredPets.length === 0 ? (
             <div className="text-center py-5" id="initial-state">
               <div className="mb-4">
                 <i className="bi bi-search display-1 text-muted" />
@@ -232,43 +317,40 @@ function AdvancedSearch() {
             </div>
           ) : (
             <div id="search-results-container">
-              <h3 className="mb-3">Результаты поиска ({filteredPets.length})</h3>
-              <div className="row g-4" id="search-results">
-                {displayedPets.map(pet => {
-                  const imageUrl = getImageUrl(pet.image) || 
-                                 (pet.photos && pet.photos.length > 0 ? getImageUrl(pet.photos[0]) : null) ||
-                                 'https://via.placeholder.com/300x200?text=Нет+фото';
-                  
-                  return (
-                    <div className="col-md-6 col-lg-4" key={pet.id}>
-                      <div className="card h-100">
-                        <img
-                          src={imageUrl}
-                          className="card-img-top pet-card-img"
-                          alt={pet.kind}
-                          style={{ height: "200px", objectFit: "cover" }}
-                          onError={(e) => {
-                            e.target.src = 'https://via.placeholder.com/300x200?text=Нет+фото';
-                          }}
-                        />
-                        <div className="card-body">
-                          <h5 className="card-title">{pet.kind}</h5>
-                          <p className="card-text">{pet.description}</p>
-                          <div className="d-flex justify-content-between align-items-center">
-                            <small className="text-muted">Найден: {pet.date}</small>
-                            <span className="badge bg-primary">{pet.district}</span>
-                          </div>
-                        </div>
-                        <div className="card-footer bg-transparent">
-                          <Link 
-                            to={`/pet/${pet.id}`}
-                            className="btn btn-outline-primary btn-sm w-100 btn-animated"
-                          >
-                            Подробнее
-                          </Link>
-                        </div>
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h3 className="mb-0">Результаты поиска ({filteredPets.length})</h3>
+                {(filters.district || filters.kind) && (
+                  <div className="alert alert-info py-2 mb-0">
+                    <div className="d-flex align-items-center">
+                      <i className="bi bi-funnel me-2"></i>
+                      <div>
+                        <strong>Фильтры:</strong>
+                        {filters.district && (
+                          <span className="badge bg-primary ms-2">Район: {filters.district}</span>
+                        )}
+                        {filters.kind && (
+                          <span className="badge bg-primary ms-2">Вид: {filters.kind}</span>
+                        )}
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="row g-4" id="search-results">
+                {displayedPets.map(pet => {
+                  if (!pet || !pet.id) {
+                    console.warn('Пропущен питомец без id:', pet);
+                    return null;
+                  }
+                  
+                  return (
+                    <PetCard 
+                      key={pet.id} 
+                      pet={pet}
+                      noBorder={false}
+                      animatedButton={true}
+                    />
                   );
                 })}
               </div>
@@ -319,8 +401,24 @@ function AdvancedSearch() {
                   </ul>
                   <div className="text-center text-muted mt-2">
                     Страница {pagination.currentPage} из {totalPages}
+                    <div className="small">
+                      Показано {displayedPets.length} из {filteredPets.length} животных
+                    </div>
                   </div>
                 </nav>
+              )}
+              
+              {/* Кнопка сброса если есть активные фильтры */}
+              {(filters.district || filters.kind) && (
+                <div className="text-center mt-4">
+                  <button
+                    className="btn btn-outline-primary"
+                    onClick={handleReset}
+                  >
+                    <i className="bi bi-x-circle me-2" />
+                    Сбросить все фильтры
+                  </button>
+                </div>
               )}
             </div>
           )}
