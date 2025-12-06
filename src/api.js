@@ -4,7 +4,7 @@ const IMAGE_BASE_URL = 'https://pets.xn--80ahdri7a.site/storage/images';
 
 // Вспомогательная функция для получения полного URL изображения
 export const getImageUrl = (imagePath) => {
-  if (!imagePath) return null;
+  if (!imagePath || imagePath === 'undefined' || imagePath === 'null') return null;
   
   // Если уже полный URL
   if (imagePath.startsWith('http')) {
@@ -31,13 +31,33 @@ export const processPetData = (pet) => {
     processed.image = getImageUrl(pet.image);
   }
   
-  // Обработка массива фотографий
-  if (pet.photos && Array.isArray(pet.photos)) {
-    processed.photos = pet.photos.map(photo => getImageUrl(photo));
+  // Обработка массива фотографий - исправлено для некорректных форматов
+  processed.photos = [];
+  
+  if (pet.photos) {
+    if (Array.isArray(pet.photos)) {
+      // Фильтруем некорректные значения и преобразуем в URL
+      processed.photos = pet.photos
+        .filter(photo => photo && 
+                        typeof photo === 'string' && 
+                        photo !== 'undefined' && 
+                        photo !== 'null' && 
+                        photo.trim() !== '')
+        .map(photo => getImageUrl(photo));
+    } else if (typeof pet.photos === 'string') {
+      // Если photos - строка с числами, разделенными запятыми
+      const photoStrings = pet.photos.split(',').map(str => str.trim());
+      processed.photos = photoStrings
+        .filter(str => str && 
+                      str !== 'undefined' && 
+                      str !== 'null' && 
+                      !/^\d+$/.test(str)) // Исключаем чистые числа
+        .map(str => getImageUrl(str));
+    }
   }
   
   // Если нет ни image, ни photos, добавляем заглушку
-  if (!processed.image && (!processed.photos || processed.photos.length === 0)) {
+  if (!processed.image && processed.photos.length === 0) {
     processed.image = 'https://via.placeholder.com/300x200?text=Нет+фото';
   }
   
@@ -73,6 +93,15 @@ async function fetchAPI(endpoint, options = {}) {
     headers,
   });
 
+  // Если неавторизован и запрос требует авторизации
+  if (response.status === 401 && token) {
+    // Токен истек или невалиден
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+    window.location.href = '/sign-in';
+    throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.message || `Ошибка ${response.status}`);
@@ -84,9 +113,7 @@ async function fetchAPI(endpoint, options = {}) {
 // Функция для загрузки файлов (multipart/form-data)
 async function fetchAPIWithFormData(endpoint, formData, options = {}) {
   const token = localStorage.getItem('authToken');
-  const headers = {
-    ...options.headers,
-  };
+  const headers = {};
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -99,6 +126,15 @@ async function fetchAPIWithFormData(endpoint, formData, options = {}) {
     headers,
   });
 
+  // Если неавторизован и запрос требует авторизации
+  if (response.status === 401 && token) {
+    // Токен истек или невалиден
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+    window.location.href = '/sign-in';
+    throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.message || `Ошибка ${response.status}`);
@@ -109,12 +145,64 @@ async function fetchAPIWithFormData(endpoint, formData, options = {}) {
 
 // API функции
 export const api = {
-  // Главная страница
+  // =================== ПОЛЬЗОВАТЕЛИ ===================
+  
+  // Получить информацию о текущем пользователе
+  getCurrentUser: () => fetchAPI('/users/'),
+  
+  // Получить информацию о конкретном пользователе
+  getUser: (id) => fetchAPI(`/users/${id}`),
+  
+  // Обновить телефон пользователя
+  updatePhone: (phone) => fetchAPI('/users/phone', {
+    method: 'PATCH',
+    body: { phone },
+  }),
+  
+  // Обновить email пользователя
+  updateEmail: (email) => fetchAPI('/users/email', {
+    method: 'PATCH',
+    body: { email },
+  }),
+  
+  // =================== ОБЪЯВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ ===================
+  
+  // Получить все объявления пользователя
+  getUserOrders: () => fetchAPI('/users/orders'),
+  
+  // Удалить объявление пользователя
+  deleteOrder: (id) => fetchAPI(`/users/orders/${id}`, {
+    method: 'DELETE',
+  }),
+  
+  // =================== ЖИВОТНЫЕ (ПИТОМЦЫ) ===================
+  
+  // Главная страница - слайдер
   getSlider: () => fetchAPI('/pets/slider'),
+  
+  // Получить всех питомцев (с пагинацией)
   getPets: () => fetchAPI('/pets'),
   
-  // Поиск
+  // Получить конкретного питомца по ID
+  getPet: (id) => fetchAPI(`/pets/${id}`),
+  
+  // Добавить нового питомца
+  addPet: (formData) => fetchAPIWithFormData('/pets/new', formData),
+  
+  // Обновить питомца
+  updatePet: (id, formData) => fetchAPIWithFormData(`/pets/${id}`, formData, {
+    method: 'PATCH',
+  }),
+  
+  // =================== ПОИСК ===================
+  
+  // Быстрый поиск (для подсказок)
   search: (query) => fetchAPI(`/search?query=${encodeURIComponent(query)}`),
+  
+  // Автодополнение
+  autocomplete: (query) => fetchAPI(`/search/autocomplete?query=${encodeURIComponent(query)}`),
+  
+  // Расширенный поиск
   advancedSearch: (params) => {
     const queryParams = new URLSearchParams();
     if (params.district) queryParams.append('district', params.district);
@@ -124,46 +212,113 @@ export const api = {
     return fetchAPI(`/search/order${queryString ? '?' + queryString : ''}`);
   },
   
-  // Карточка животного
-  getPet: (id) => fetchAPI(`/pets/${id}`),
+  // =================== АВТОРИЗАЦИЯ ===================
   
-  // Авторизация
+  // Вход
   login: (credentials) => fetchAPI('/login', {
     method: 'POST',
     body: credentials,
   }),
   
+  // Регистрация
   register: (userData) => fetchAPI('/register', {
     method: 'POST',
-    body: userData,
+    body: {
+      name: userData.name,
+      phone: userData.phone,
+      email: userData.email,
+      password: userData.password,
+      password_confirmation: userData.password,
+      confirm: userData.agree ? 1 : 0
+    },
   }),
   
-  // Пользователь
-  getUser: (id) => fetchAPI(`/users/${id}`),
-  updatePhone: (id, phone) => fetchAPI(`/users/${id}/phone`, {
-    method: 'PATCH',
-    body: { phone },
-  }),
-  updateEmail: (id, email) => fetchAPI(`/users/${id}/email`, {
-    method: 'PATCH',
-    body: { email },
-  }),
+  // =================== ПОДПИСКА ===================
   
-  // Объявления пользователя
-  getUserOrders: (id) => fetchAPI(`/users/orders/${id}`),
-  deleteOrder: (id) => fetchAPI(`/users/orders/${id}`, {
-    method: 'DELETE',
-  }),
-  
-  // Добавление/редактирование животного
-  addPet: (formData) => fetchAPIWithFormData('/pets/new', formData),
-  updatePet: (id, formData) => fetchAPIWithFormData(`/pets/${id}`, formData, {
-    method: 'PATCH',
-  }),
-  
-  // Подписка
+  // Подписка на рассылку
   subscribe: (email) => fetchAPI('/subscription', {
     method: 'POST',
     body: { email },
   }),
+  
+  // =================== ВСПОМОГАТЕЛЬНЫЕ ===================
+  
+  // Проверить авторизацию
+  checkAuth: () => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return Promise.reject(new Error('Not authenticated'));
+    
+    return fetchAPI('/users/');
+  },
+  
+  // Выйти из системы (клиентская функция)
+  logout: () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+    return Promise.resolve();
+  }
+};
+
+// Дополнительные вспомогательные функции
+export const auth = {
+  // Проверить авторизацию
+  isAuthenticated: () => {
+    return !!localStorage.getItem('authToken');
+  },
+  
+  // Получить токен
+  getToken: () => {
+    return localStorage.getItem('authToken');
+  },
+  
+  // Получить данные пользователя
+  getUserData: () => {
+    const userData = localStorage.getItem('userData');
+    return userData ? JSON.parse(userData) : null;
+  },
+  
+  // Сохранить данные пользователя после входа
+  setUserData: (token, userData) => {
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('userData', JSON.stringify(userData));
+  },
+  
+  // Очистить данные авторизации
+  clear: () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+  }
+};
+
+// Функция для обработки ошибок API
+export const handleApiError = (error, context) => {
+  console.error(`API Error in ${context}:`, error);
+  
+  // Если это ошибка сети
+  if (error.message === 'Failed to fetch') {
+    return 'Ошибка сети. Проверьте подключение к интернету.';
+  }
+  
+  // Если неавторизован
+  if (error.message.includes('401')) {
+    return 'Необходима авторизация. Пожалуйста, войдите в систему.';
+  }
+  
+  // Если доступ запрещен
+  if (error.message.includes('403')) {
+    return 'Доступ запрещен. У вас нет прав для выполнения этого действия.';
+  }
+  
+  // Если не найдено
+  if (error.message.includes('404')) {
+    return 'Запрашиваемый ресурс не найден.';
+  }
+  
+  // Если ошибка валидации
+  if (error.message.includes('422')) {
+    return 'Ошибка валидации данных. Проверьте введенные данные.';
+  }
+  
+  // Вернуть оригинальное сообщение об ошибке
+  return error.message || 'Произошла неизвестная ошибка';
 };

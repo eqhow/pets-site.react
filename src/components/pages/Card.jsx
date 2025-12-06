@@ -127,6 +127,9 @@ function Card() {
       ? [pet.image] 
       : ['https://via.placeholder.com/600x400?text=Нет+фото'];
 
+  // Проверяем сколько фотографий
+  const hasMultiplePhotos = photos.length > 1;
+
   return (
     <div id="pet-card" className="page fade-in">
       <div className="container my-5">
@@ -136,20 +139,25 @@ function Card() {
             {photos.length > 0 && (
               <div
                 id="petCarousel"
-                className="carousel slide mb-4"
+                className={`carousel slide mb-4 ${hasMultiplePhotos ? '' : 'carousel-fixed'}`}
                 data-bs-ride="carousel"
               >
-                <div className="carousel-indicators">
-                  {photos.map((_, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      data-bs-target="#petCarousel"
-                      data-bs-slide-to={index}
-                      className={index === 0 ? "active" : ""}
-                    />
-                  ))}
-                </div>
+                {/* Индикаторы (точки) показываем только если есть более одной фотографии */}
+                {hasMultiplePhotos && (
+                  <div className="carousel-indicators">
+                    {photos.map((_, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        data-bs-target="#petCarousel"
+                        data-bs-slide-to={index}
+                        className={index === 0 ? "active" : ""}
+                        aria-label={`Слайд ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+                
                 <div className="carousel-inner rounded-3">
                   {photos.map((photo, index) => (
                     <div key={index} className={`carousel-item ${index === 0 ? "active" : ""}`}>
@@ -165,22 +173,30 @@ function Card() {
                     </div>
                   ))}
                 </div>
-                <button
-                  className="carousel-control-prev"
-                  type="button"
-                  data-bs-target="#petCarousel"
-                  data-bs-slide="prev"
-                >
-                  <span className="carousel-control-prev-icon" />
-                </button>
-                <button
-                  className="carousel-control-next"
-                  type="button"
-                  data-bs-target="#petCarousel"
-                  data-bs-slide="next"
-                >
-                  <span className="carousel-control-next-icon" />
-                </button>
+                
+                {/* Кнопки навигации показываем только если есть более одной фотографии */}
+                {hasMultiplePhotos && (
+                  <>
+                    <button
+                      className="carousel-control-prev"
+                      type="button"
+                      data-bs-target="#petCarousel"
+                      data-bs-slide="prev"
+                    >
+                      <span className="carousel-control-prev-icon" />
+                      <span className="visually-hidden">Предыдущий</span>
+                    </button>
+                    <button
+                      className="carousel-control-next"
+                      type="button"
+                      data-bs-target="#petCarousel"
+                      data-bs-slide="next"
+                    >
+                      <span className="carousel-control-next-icon" />
+                      <span className="visually-hidden">Следующий</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
             
@@ -274,30 +290,6 @@ function Card() {
                 </button>
               </div>
             </div>
-            
-            {/* Похожие объявления */}
-            {similarPets.length > 0 && (
-              <div className="card">
-                <div className="card-body">
-                  <h5 className="card-title">Похожие объявления</h5>
-                  <div className="list-group list-group-flush">
-                    {similarPets.map(similarPet => (
-                      <button
-                        key={similarPet.id}
-                        className="list-group-item list-group-item-action text-start"
-                        onClick={() => navigate(`/pet/${similarPet.id}`)}
-                      >
-                        <div className="d-flex w-100 justify-content-between">
-                          <h6 className="mb-1">Найдена {similarPet.kind}</h6>
-                          <small>{similarPet.date}</small>
-                        </div>
-                        <p className="mb-1">Район: {similarPet.district}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

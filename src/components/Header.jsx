@@ -1,58 +1,192 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import { AuthContext, PetsContext, AlertContext } from '../App';
 import '../assets/css/style.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link, useNavigate } from "react-router-dom";
 import { NavDropdown } from 'react-bootstrap';
-import { getImageUrl } from '../api';
+import { api } from '../api';
 
 function Header() {
   const { isLoggedIn, user, logoutUser } = useContext(AuthContext);
-  const { allPets, filterPets } = useContext(PetsContext);
+  const { filterPets } = useContext(PetsContext);
   const { showAlert } = useContext(AlertContext);
   const navigate = useNavigate();
+  const searchRef = useRef(null);
+  const inputRef = useRef(null);
+  const timeoutRef = useRef(null);
 
-  // Локальное состояние для быстрого поиска
+  // Локальное состояние для подсказок
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [showResults, setShowResults] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
 
-  // Обработчик быстрого поиска
-  const handleQuickSearch = () => {
-    if (!searchTerm.trim()) {
-      setShowResults(false);
+  // Функция для получения подсказок с API
+  const fetchSuggestions = async (query) => {
+    if (!query.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
 
-    const filtered = allPets.filter(pet =>
-      pet.kind?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pet.district?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    setSearchResults(filtered.slice(0, 5));
-    setShowResults(true);
+    try {
+      setIsLoading(true);
+      const response = await api.autocomplete(query);
+      
+      // Обрабатываем разные форматы ответа
+      let suggestionsList = [];
+      
+      if (response.data?.suggestions) {
+        suggestionsList = response.data.suggestions;
+      } else if (response.data?.keywords) {
+        suggestionsList = response.data.keywords;
+      } else if (Array.isArray(response.data)) {
+        suggestionsList = response.data;
+      } else if (Array.isArray(response)) {
+        suggestionsList = response;
+      } else if (response.data?.kinds) {
+        // Если API возвращает виды животных
+        suggestionsList = response.data.kinds;
+      }
+      
+      // Если API не поддерживает автодополнение, создаем фиктивные подсказки
+      if (suggestionsList.length === 0) {
+        suggestionsList = generateMockSuggestions(query);
+      }
+      
+      setSuggestions(suggestionsList.slice(0, 8)); // Ограничиваем 8 подсказками
+      setShowSuggestions(true);
+      setSelectedIndex(-1); // Сбрасываем выделение
+    } catch (error) {
+      console.error('Ошибка получения подсказок:', error);
+      // Если endpoint не работает, используем моковые данные
+      const mockSuggestions = generateMockSuggestions(query);
+      setSuggestions(mockSuggestions.slice(0, 8));
+      setShowSuggestions(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Обработчик ввода в поиск
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchTerm.trim()) {
-        handleQuickSearch();
-      }
-    }, 300);
+  // Генерация моковых подсказок (если API не работает)
+  const generateMockSuggestions = (query) => {
+    const baseSuggestions = [
+      "кошка",
+      "кошка красивая", 
+      "кошка породистая",
+      "кошка шотландская",
+      "кот",
+      "котенок",
+      "кот персидский",
+      "собака",
+      "собака овчарка",
+      "щенок",
+      "попугай",
+      "хомяк",
+      "кролик",
+      "шиншилла",
+      "морская свинка",
+      "крыса",
+      "мышь",
+      "черепаха",
+      "рыбки",
+      "птица"
+    ];
+    
+    const queryLower = query.toLowerCase();
+    return baseSuggestions.filter(suggestion => 
+      suggestion.toLowerCase().includes(queryLower)
+    );
+  };
 
-    return () => clearTimeout(timeoutId);
+  // Обработчик ввода с debounce
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(() => {
+      if (searchTerm.trim()) {
+        fetchSuggestions(searchTerm);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 200);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, [searchTerm]);
 
-  // Переход на страницу расширенного поиска
-  const handleAdvancedSearch = () => {
-    if (searchTerm.trim()) {
-      filterPets({ kind: searchTerm });
-      navigate('/advancedsearch');
-      setShowResults(false);
+  // Закрытие подсказок при клике вне
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Обработка клавиш для навигации по подсказкам
+  const handleKeyDown = (e) => {
+    if (!showSuggestions) return;
+    
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedIndex(prev => 
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+        
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+        
+      case 'Enter':
+        e.preventDefault();
+        if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+          // Выбираем подсказку
+          handleSuggestionSelect(suggestions[selectedIndex]);
+        } else if (searchTerm.trim()) {
+          // Ищем по введенному тексту
+          handleSearch();
+        }
+        break;
+        
+      case 'Escape':
+        setShowSuggestions(false);
+        break;
     }
+  };
+
+  // Выбор подсказки
+  const handleSuggestionSelect = (suggestion) => {
+    setSearchTerm(suggestion);
+    setShowSuggestions(false);
+    // Фокусируемся обратно на инпут для продолжения ввода или поиска
+    inputRef.current?.focus();
+  };
+
+  // Поиск по выбранному тексту
+  const handleSearch = () => {
+    if (!searchTerm.trim()) return;
+    
+    filterPets({ kind: searchTerm });
+    navigate('/advancedsearch');
+    setShowSuggestions(false);
+    setSearchTerm("");
   };
 
   // Обработчик выхода
@@ -96,78 +230,59 @@ function Header() {
               </li>
             </ul>
             <div className="d-flex align-items-center">
-              <div className="input-group me-3 position-relative search-account-gap">
+              <div className="input-group me-3 position-relative search-account-gap" ref={searchRef}>
                 <input
+                  ref={inputRef}
                   type="text"
                   className="form-control"
                   placeholder="Быстрый поиск"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  onFocus={() => searchTerm.trim() && setShowResults(true)}
-                  onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                  onFocus={() => {
+                    if (searchTerm.trim() && suggestions.length > 0) {
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  onKeyDown={handleKeyDown}
                 />
                 <button
                   className="btn btn-outline-primary search-btn-custom"
                   type="button"
-                  onClick={handleQuickSearch}
+                  onClick={handleSearch}
                 >
                   <i className="bi bi-search" />
                 </button>
-                {showResults && searchResults.length > 0 && (
-                  <div className="quick-search-results" style={{ display: 'block' }}>
-                    {searchResults.map(pet => {
-                      const imageUrl = getImageUrl(pet.image) || 
-                                     (pet.photos && pet.photos.length > 0 ? getImageUrl(pet.photos[0]) : null) ||
-                                     'https://via.placeholder.com/50x50?text=Нет+фото';
-                      
-                      return (
+                
+                {/* Подсказки */}
+                {showSuggestions && (
+                  <div className="autocomplete-suggestions" style={{ display: 'block' }}>
+                    {isLoading ? (
+                      <div className="suggestion-item text-center">
+                        <div className="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                        <small>Загрузка подсказок...</small>
+                      </div>
+                    ) : suggestions.length > 0 ? (
+                      suggestions.map((suggestion, index) => (
                         <div
-                          key={pet.id}
-                          className="quick-search-item"
-                          onClick={() => {
-                            navigate(`/pet/${pet.id}`);
-                            setShowResults(false);
-                          }}
+                          key={index}
+                          className={`suggestion-item ${index === selectedIndex ? 'selected' : ''}`}
+                          onClick={() => handleSuggestionSelect(suggestion)}
+                          onMouseEnter={() => setSelectedIndex(index)}
                         >
-                          <img 
-                            src={imageUrl} 
-                            alt={pet.kind}
-                            onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/50x50?text=Нет+фото';
-                            }}
-                          />
-                          <div className="quick-search-item-info">
-                            <div className="quick-search-item-title">{pet.kind}</div>
-                            <div className="quick-search-item-meta">{pet.district} • {pet.date}</div>
-                          </div>
+                          <i className="bi bi-search me-2 text-muted"></i>
+                          <span>{suggestion}</span>
                         </div>
-                      );
-                    })}
-                    {allPets.filter(pet =>
-                      pet.kind?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      pet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      pet.district?.toLowerCase().includes(searchTerm.toLowerCase())
-                    ).length > 5 && (
-                      <div
-                        className="quick-search-item text-center"
-                        onClick={handleAdvancedSearch}
-                      >
-                        <small className="text-primary">
-                          Показать все результаты ({
-                            allPets.filter(pet =>
-                              pet.kind?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              pet.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              pet.district?.toLowerCase().includes(searchTerm.toLowerCase())
-                            ).length
-                          })
-                        </small>
+                      ))
+                    ) : (
+                      <div className="suggestion-item text-center text-muted">
+                        <small>Нет подсказок</small>
                       </div>
                     )}
                   </div>
                 )}
               </div>
               
-              {/* Используем React Bootstrap Dropdown без стрелки */}
+              {/* Аккаунт */}
               <NavDropdown 
                 title={
                   <span>
@@ -176,7 +291,6 @@ function Header() {
                 }
                 id="navbarDropdown"
                 align="end"
-                // Стили для удаления стрелки
                 className="nav-item"
                 menuVariant="light"
               >

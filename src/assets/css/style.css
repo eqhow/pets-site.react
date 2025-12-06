@@ -326,3 +326,89 @@ color: white;
     padding: 0.75rem;
 }
 
+/* Автодополнение/подсказки */
+.autocomplete-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 5px;
+}
+
+.suggestion-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f1f1;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.suggestion-item:hover {
+  background-color: #f8f9fa;
+}
+
+.suggestion-item.selected {
+  background-color: #e7f1ff;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+/* Расстояние между поиском и аккаунтом */
+.search-account-gap {
+  margin-right: 15px;
+}
+
+.search-btn-custom {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-top-right-radius: 0.375rem !important;
+  border-bottom-right-radius: 0.375rem !important;
+}
+
+/* Индикатор загрузки */
+.spinner-border {
+  vertical-align: middle;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .search-account-gap {
+    margin-right: 0;
+    margin-bottom: 10px;
+    width: 100%;
+  }
+  
+  .autocomplete-suggestions {
+    position: fixed;
+    top: 56px;
+    left: 10px;
+    right: 10px;
+    z-index: 1050;
+  }
+}
+
+/* В файл style.css добавьте: */
+.carousel-fixed .carousel-inner {
+  position: relative;
+}
+
+.carousel-fixed .carousel-item {
+  position: relative;
+  display: block;
+}
+
+.carousel-fixed .carousel-item img {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}

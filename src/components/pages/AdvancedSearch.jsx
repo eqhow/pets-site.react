@@ -14,8 +14,7 @@ function AdvancedSearch() {
     filterPets, 
     resetFilters, 
     setCurrentPage,
-    loadPets,
-    allPets // Добавляем доступ ко всем животным
+    loadPets
   } = useContext(PetsContext);
   
   const { showAlert } = useContext(AlertContext);
@@ -29,11 +28,11 @@ function AdvancedSearch() {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
-  const [localFilteredPets, setLocalFilteredPets] = useState([]);
+  const [localSearchResults, setLocalSearchResults] = useState([]);
+  const [localCurrentPage, setLocalCurrentPage] = useState(1);
 
   // При монтировании НЕ загружаем животных сразу
   useEffect(() => {
-    // Просто помечаем что загрузка завершена
     setInitialLoad(false);
   }, []);
 
@@ -45,20 +44,20 @@ function AdvancedSearch() {
     });
   }, [filters]);
 
-  // Следим за изменениями filteredPets и обновляем локальное состояние
+  // Когда изменяются filteredPets в контексте, обновляем локальные результаты
   useEffect(() => {
-    if (hasSearched) {
-      setLocalFilteredPets(filteredPets);
+    if (hasSearched && filteredPets.length > 0) {
+      setLocalSearchResults(filteredPets);
+      setLocalCurrentPage(1); // Сбрасываем на первую страницу при новом поиске
     }
   }, [filteredPets, hasSearched]);
 
-  // Функция для подготовки данных для PetCard (минимальная обработка)
+  // Функция для подготовки данных для PetCard
   const preparePetForCard = (pet) => {
     if (!pet) return pet;
     
     const preparedPet = { ...pet };
     
-    // Только базовые преобразования полей
     if (!preparedPet.kind && preparedPet.type) {
       preparedPet.kind = preparedPet.type;
     }
@@ -87,16 +86,14 @@ function AdvancedSearch() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setHasSearched(true);
     
     try {
       // Сначала загружаем животных, если они еще не загружены
-      if (filteredPets.length === 0 && allPets.length === 0) {
-        await loadPets();
-      }
+      await loadPets();
       
       // Затем применяем фильтры
       await filterPets(formValues);
+      setHasSearched(true);
     } catch (error) {
       showAlert('Ошибка поиска: ' + error.message, 'danger');
       console.error('Search error:', error);
@@ -109,24 +106,30 @@ function AdvancedSearch() {
   const handleReset = () => {
     setFormValues({ district: '', kind: '' });
     setHasSearched(false);
-    setLocalFilteredPets([]);
+    setLocalSearchResults([]);
+    setLocalCurrentPage(1);
     resetFilters();
   };
 
-  // Определяем какие животные показывать
-  const petsToShow = hasSearched ? localFilteredPets : [];
+  // Обработчик изменения страницы
+  const handlePageChange = (page) => {
+    setLocalCurrentPage(page);
+    // Прокручиваем к началу страницы
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Расчет отображаемых животных с пагинацией
+  const itemsPerPage = 6;
   const displayedPets = useMemo(() => {
-    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
-    const endIndex = startIndex + pagination.itemsPerPage;
-    return petsToShow
+    const startIndex = (localCurrentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return localSearchResults
       .slice(startIndex, endIndex)
       .map(pet => preparePetForCard(pet));
-  }, [petsToShow, pagination]);
+  }, [localSearchResults, localCurrentPage]);
 
   // Расчет пагинации
-  const totalPages = Math.ceil(petsToShow.length / pagination.itemsPerPage);
+  const totalPages = Math.ceil(localSearchResults.length / itemsPerPage);
 
   // Функция для отображения ограниченного количества страниц
   const getPaginationItems = () => {
@@ -138,8 +141,8 @@ function AdvancedSearch() {
         items.push(i);
       }
     } else {
-      const leftSibling = Math.max(pagination.currentPage - 1, 1);
-      const rightSibling = Math.min(pagination.currentPage + 1, totalPages);
+      const leftSibling = Math.max(localCurrentPage - 1, 1);
+      const rightSibling = Math.min(localCurrentPage + 1, totalPages);
       
       const shouldShowLeftDots = leftSibling > 2;
       const shouldShowRightDots = rightSibling < totalPages - 1;
@@ -246,7 +249,7 @@ function AdvancedSearch() {
                     onClick={handleReset}
                     disabled={loading}
                   >
-                    Сбросить
+                    Сброс
                   </button>
                 </div>
               </div>
@@ -281,7 +284,7 @@ function AdvancedSearch() {
                 Выберите район и/или укажите вид животного, чтобы увидеть результаты
               </p>
             </div>
-          ) : petsToShow.length === 0 ? (
+          ) : localSearchResults.length === 0 ? (
             // Результатов не найдено после поиска
             <div className="text-center py-5" id="no-results-state">
               <div className="mb-4">
@@ -301,7 +304,10 @@ function AdvancedSearch() {
             // Есть результаты поиска
             <div id="search-results-container">
               <div className="d-flex justify-content-between align-items-center mb-4">
-                <h3 className="mb-0">Результаты поиска ({petsToShow.length})</h3>
+                <h3 className="mb-0">Найдено животных: {localSearchResults.length}</h3>
+                <div className="text-muted">
+                  Страница {localCurrentPage} из {totalPages}
+                </div>
               </div>
               
               <div className="row g-4" id="search-results">
@@ -326,11 +332,11 @@ function AdvancedSearch() {
               {totalPages > 1 && (
                 <nav className="mt-5" id="pagination-container">
                   <ul className="pagination justify-content-center" id="pagination">
-                    <li className={`page-item ${pagination.currentPage === 1 ? 'disabled' : ''}`}>
+                    <li className={`page-item ${localCurrentPage === 1 ? 'disabled' : ''}`}>
                       <button
                         className="page-link"
-                        onClick={() => setCurrentPage(pagination.currentPage - 1)}
-                        disabled={pagination.currentPage === 1}
+                        onClick={() => handlePageChange(localCurrentPage - 1)}
+                        disabled={localCurrentPage === 1}
                       >
                         <i className="bi bi-chevron-left"></i>
                       </button>
@@ -344,11 +350,11 @@ function AdvancedSearch() {
                       ) : (
                         <li 
                           key={item}
-                          className={`page-item ${pagination.currentPage === item ? 'active' : ''}`}
+                          className={`page-item ${localCurrentPage === item ? 'active' : ''}`}
                         >
                           <button
                             className="page-link"
-                            onClick={() => setCurrentPage(item)}
+                            onClick={() => handlePageChange(item)}
                           >
                             {item}
                           </button>
@@ -356,11 +362,11 @@ function AdvancedSearch() {
                       )
                     ))}
                     
-                    <li className={`page-item ${pagination.currentPage === totalPages ? 'disabled' : ''}`}>
+                    <li className={`page-item ${localCurrentPage === totalPages ? 'disabled' : ''}`}>
                       <button
                         className="page-link"
-                        onClick={() => setCurrentPage(pagination.currentPage + 1)}
-                        disabled={pagination.currentPage === totalPages}
+                        onClick={() => handlePageChange(localCurrentPage + 1)}
+                        disabled={localCurrentPage === totalPages}
                       >
                         <i className="bi bi-chevron-right"></i>
                       </button>
