@@ -14,7 +14,8 @@ function AdvancedSearch() {
     filterPets, 
     resetFilters, 
     setCurrentPage,
-    loadPets
+    loadPets,
+    allPets // Добавляем доступ ко всем животным
   } = useContext(PetsContext);
   
   const { showAlert } = useContext(AlertContext);
@@ -25,24 +26,16 @@ function AdvancedSearch() {
     kind: filters.kind || ''
   });
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [localFilteredPets, setLocalFilteredPets] = useState([]);
 
-  // При монтировании загружаем всех питомцев если еще не загружены
+  // При монтировании НЕ загружаем животных сразу
   useEffect(() => {
-    const loadInitialData = async () => {
-      if (filteredPets.length === 0) {
-        try {
-          await loadPets();
-        } catch (error) {
-          showAlert('Ошибка загрузки данных', 'danger');
-        }
-      }
-      setLoading(false);
-    };
-    
-    loadInitialData();
-  }, [filteredPets.length, loadPets, showAlert]);
+    // Просто помечаем что загрузка завершена
+    setInitialLoad(false);
+  }, []);
 
   // Синхронизируем formValues с фильтрами из контекста
   useEffect(() => {
@@ -51,6 +44,13 @@ function AdvancedSearch() {
       kind: filters.kind || ''
     });
   }, [filters]);
+
+  // Следим за изменениями filteredPets и обновляем локальное состояние
+  useEffect(() => {
+    if (hasSearched) {
+      setLocalFilteredPets(filteredPets);
+    }
+  }, [filteredPets, hasSearched]);
 
   // Функция для подготовки данных для PetCard (минимальная обработка)
   const preparePetForCard = (pet) => {
@@ -71,9 +71,6 @@ function AdvancedSearch() {
       preparedPet.date = preparedPet.created_at;
     }
     
-    // Ничего не делаем с photo и photos - PetCard сам разберется
-    // Оставляем как есть, даже если это кривые данные
-    
     return preparedPet;
   };
 
@@ -93,6 +90,12 @@ function AdvancedSearch() {
     setHasSearched(true);
     
     try {
+      // Сначала загружаем животных, если они еще не загружены
+      if (filteredPets.length === 0 && allPets.length === 0) {
+        await loadPets();
+      }
+      
+      // Затем применяем фильтры
       await filterPets(formValues);
     } catch (error) {
       showAlert('Ошибка поиска: ' + error.message, 'danger');
@@ -106,20 +109,24 @@ function AdvancedSearch() {
   const handleReset = () => {
     setFormValues({ district: '', kind: '' });
     setHasSearched(false);
+    setLocalFilteredPets([]);
     resetFilters();
   };
+
+  // Определяем какие животные показывать
+  const petsToShow = hasSearched ? localFilteredPets : [];
 
   // Расчет отображаемых животных с пагинацией
   const displayedPets = useMemo(() => {
     const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
     const endIndex = startIndex + pagination.itemsPerPage;
-    return filteredPets
+    return petsToShow
       .slice(startIndex, endIndex)
       .map(pet => preparePetForCard(pet));
-  }, [filteredPets, pagination]);
+  }, [petsToShow, pagination]);
 
   // Расчет пагинации
-  const totalPages = Math.ceil(filteredPets.length / pagination.itemsPerPage);
+  const totalPages = Math.ceil(petsToShow.length / pagination.itemsPerPage);
 
   // Функция для отображения ограниченного количества страниц
   const getPaginationItems = () => {
@@ -160,23 +167,6 @@ function AdvancedSearch() {
     
     return items;
   };
-
-  // Отладочный вывод структуры данных
-  useEffect(() => {
-    if (displayedPets.length > 0) {
-      const samplePet = displayedPets[0];
-      console.log('Пример данных питомца для отладки:', {
-        id: samplePet.id,
-        type: samplePet.type,
-        kind: samplePet.kind,
-        photo: samplePet.photo,
-        photos: samplePet.photos,
-        photoType: typeof samplePet.photo,
-        photosType: typeof samplePet.photos,
-        isPhotosArray: Array.isArray(samplePet.photos)
-      });
-    }
-  }, [displayedPets]);
 
   return (
     <div id="search" className="page fade-in">
@@ -273,7 +263,15 @@ function AdvancedSearch() {
               </div>
               <p className="mt-3">Загрузка...</p>
             </div>
-          ) : !hasSearched && filteredPets.length === 0 ? (
+          ) : initialLoad ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Загрузка...</span>
+              </div>
+              <p className="mt-3">Загрузка...</p>
+            </div>
+          ) : !hasSearched ? (
+            // Изначальное состояние - когда еще не было поиска
             <div className="text-center py-5" id="initial-state">
               <div className="mb-4">
                 <i className="bi bi-search display-1 text-muted" />
@@ -283,7 +281,8 @@ function AdvancedSearch() {
                 Выберите район и/или укажите вид животного, чтобы увидеть результаты
               </p>
             </div>
-          ) : filteredPets.length === 0 ? (
+          ) : petsToShow.length === 0 ? (
+            // Результатов не найдено после поиска
             <div className="text-center py-5" id="no-results-state">
               <div className="mb-4">
                 <i className="bi bi-search display-1 text-muted" />
@@ -299,25 +298,10 @@ function AdvancedSearch() {
               </button>
             </div>
           ) : (
+            // Есть результаты поиска
             <div id="search-results-container">
               <div className="d-flex justify-content-between align-items-center mb-4">
-                <h3 className="mb-0">Результаты поиска ({filteredPets.length})</h3>
-                {(filters.district || filters.kind) && (
-                  <div className="alert alert-info py-2 mb-0">
-                    <div className="d-flex align-items-center">
-                      <i className="bi bi-funnel me-2"></i>
-                      <div>
-                        <strong>Фильтры:</strong>
-                        {filters.district && (
-                          <span className="badge bg-primary ms-2">Район: {filters.district}</span>
-                        )}
-                        {filters.kind && (
-                          <span className="badge bg-primary ms-2">Вид: {filters.kind}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <h3 className="mb-0">Результаты поиска ({petsToShow.length})</h3>
               </div>
               
               <div className="row g-4" id="search-results">
@@ -382,26 +366,7 @@ function AdvancedSearch() {
                       </button>
                     </li>
                   </ul>
-                  <div className="text-center text-muted mt-2">
-                    Страница {pagination.currentPage} из {totalPages}
-                    <div className="small">
-                      Показано {displayedPets.length} из {filteredPets.length} животных
-                    </div>
-                  </div>
                 </nav>
-              )}
-              
-              {/* Кнопка сброса если есть активные фильтры */}
-              {(filters.district || filters.kind) && (
-                <div className="text-center mt-4">
-                  <button
-                    className="btn btn-outline-primary"
-                    onClick={handleReset}
-                  >
-                    <i className="bi bi-x-circle me-2" />
-                    Сбросить все фильтры
-                  </button>
-                </div>
               )}
             </div>
           )}
