@@ -16,17 +16,16 @@ function Home() {
   // Состояние для подписки
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [isSubscribing, setIsSubscribing] = useState(false);
   
   // Загружаем недавние животные
   useEffect(() => {
     const fetchRecentPets = async () => {
       setLoadingRecent(true);
       try {
-        // Загружаем все животные
         const response = await api.getPets();
         const allPetsData = response.data?.orders || [];
         
-        // Сортируем по дате (сначала новые)
         const sorted = [...allPetsData]
           .sort((a, b) => {
             try {
@@ -37,7 +36,7 @@ function Home() {
               return 0;
             }
           })
-          .slice(0, 6); // Берем 6 последних
+          .slice(0, 6);
         
         setRecentPets(sorted);
       } catch (error) {
@@ -65,27 +64,57 @@ function Home() {
     }
   }, [allPets, showAlert]);
 
-  // Обработчик подписки
+  // Обработчик подписки - ИСПРАВЛЕННАЯ ВЕРСИЯ
   const handleSubscribe = async (e) => {
     e.preventDefault();
     
+    // Валидация на клиенте
     if (!email.trim()) {
       setEmailError("Пожалуйста, введите email");
       return;
     }
     
-    if (!/\S+@\S+\.\S+/.test(email)) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
       setEmailError("Пожалуйста, введите корректный email");
       return;
     }
     
+    // Очищаем предыдущие ошибки
+    setEmailError("");
+    setIsSubscribing(true);
+    
     try {
-      await api.subscribe({ email });
+      // Подготавливаем данные для отправки
+      const emailData = {
+        email: email.trim().toLowerCase() // Приводим к нижнему регистру
+      };
+      
+      console.log('Отправка подписки:', emailData);
+      
+      // Отправляем запрос через API
+      await api.subscribe(emailData);
+      
       showAlert("Вы успешно подписались на новости!", "success");
       setEmail("");
       setEmailError("");
     } catch (error) {
-      showAlert(error.message, 'danger');
+      console.error('Ошибка при подписке:', error);
+      
+      // Парсим сообщение об ошибке
+      let errorMessage = error.message || 'Произошла ошибка при подписке';
+      
+      // Если ошибка валидации email от сервера
+      if (error.message && error.message.includes('email')) {
+        errorMessage = "Пожалуйста, введите корректный email адрес";
+      } else if (error.message && error.message.includes('уже подписан')) {
+        errorMessage = "Этот email уже подписан на рассылку";
+      }
+      
+      setEmailError(errorMessage);
+      showAlert(errorMessage, 'danger');
+    } finally {
+      setIsSubscribing(false);
     }
   };
 
@@ -204,7 +233,7 @@ function Home() {
           )}
         </section>
 
-        {/* Подписка на новости */}
+        {/* Подписка на новости - ИСПРАВЛЕННЫЙ БЛОК */}
         <section className="container mb-5">
           <div className="row justify-content-center">
             <div className="col-lg-8">
@@ -229,18 +258,27 @@ function Home() {
                           setEmail(e.target.value);
                           if (emailError) setEmailError("");
                         }}
+                        disabled={isSubscribing}
                         required
                       />
                       {emailError && (
-                        <div className="invalid-feedback">{emailError}</div>
+                        <div className="invalid-feedback d-block">{emailError}</div>
                       )}
                     </div>
                     <div className="col-md-4">
                       <button
                         type="submit"
                         className="btn btn-primary w-100 btn-animated"
+                        disabled={isSubscribing}
                       >
-                        Подписаться
+                        {isSubscribing ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            Отправка...
+                          </>
+                        ) : (
+                          'Подписаться'
+                        )}
                       </button>
                     </div>
                   </form>

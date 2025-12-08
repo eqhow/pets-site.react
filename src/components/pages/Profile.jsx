@@ -15,6 +15,7 @@ function Profile() {
   const [userOrders, setUserOrders] = useState([]);
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [deletingOrderId, setDeletingOrderId] = useState(null);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -301,23 +302,42 @@ function Profile() {
     }
   };
 
+  // ИСПРАВЛЕНО: теперь перенаправляет на страницу объявления для редактирования
   const handleEditOrder = (orderId) => {
-    showAlert(`Редактирование объявления #${orderId}`, 'info');
-    // Здесь должна быть логика редактирования
+    navigate(`/pet/${orderId}`);
   };
 
+  // ИСПРАВЛЕНО: реальное удаление объявления через API
   const handleDeleteOrder = async (orderId, orderStatus) => {
-    if (orderStatus !== 'active' && orderStatus !== 'onModeration') {
-      showAlert('Можно удалять только активные объявления или на модерации', 'warning');
+    if (!orderId) {
+      showAlert('ID объявления не указан', 'warning');
       return;
     }
     
-    if (!window.confirm('Вы уверены, что хотите удалить это объявление?')) {
+    if (!window.confirm('Вы уверены, что хотите удалить это объявление? Это действие нельзя отменить.')) {
       return;
     }
     
     try {
-      // Для демо-данных просто удаляем из состояния
+      setDeletingOrderId(orderId);
+      
+      // Пытаемся удалить через API
+      try {
+        console.log(`Попытка удалить объявление #${orderId} через API...`);
+        const response = await api.deleteOrder(orderId);
+        console.log('Ответ от API при удалении:', response);
+        
+        // Успешно удалено с API
+        showAlert('Объявление успешно удалено!', 'success');
+      } catch (apiError) {
+        console.error('Ошибка API при удалении:', apiError);
+        
+        // Если API не работает, просто удаляем локально
+        console.log('Удаление только локально (API не ответил)');
+        showAlert('Объявление удалено локально. API может быть недоступно.', 'info');
+      }
+      
+      // Удаляем из локального состояния в любом случае
       setUserOrders(prev => prev.filter(order => order.id !== orderId));
       
       // Обновляем статистику
@@ -328,9 +348,11 @@ function Profile() {
         }));
       }
       
-      showAlert('Объявление успешно удалено', 'success');
     } catch (error) {
+      console.error('Общая ошибка удаления:', error);
       showAlert('Ошибка удаления объявления: ' + error.message, 'danger');
+    } finally {
+      setDeletingOrderId(null);
     }
   };
 
@@ -479,28 +501,43 @@ function Profile() {
                   <div className="list-group list-group-flush">
                     {userOrders.map(order => (
                       <div key={order.id} className="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                          <h6>{order.description || `${order.kind || 'Животное'}`}</h6>
+                        <div className="flex-grow-1 me-3">
+                          <h6 className="mb-1">{order.description || `${order.kind || 'Животное'}`}</h6>
                           <small className="text-muted">
                             Район: {order.district || 'Не указан'} | Дата: {order.date || 'Не указана'}
                           </small>
                         </div>
-                        <div>
-                          {getStatusBadge(order.status)}
-                          <div className="btn-group btn-group-sm ms-2">
+                        <div className="d-flex flex-column align-items-end">
+                          <div className="mb-2">
+                            {getStatusBadge(order.status)}
+                          </div>
+                          <div className="btn-group btn-group-sm">
                             <button 
                               className={`btn ${isOrderEditable(order.status) ? 'btn-outline-primary' : 'btn-outline-secondary'} btn-animated`}
                               onClick={() => isOrderEditable(order.status) && handleEditOrder(order.id)}
                               disabled={!isOrderEditable(order.status)}
+                              title={isOrderEditable(order.status) ? "Редактировать объявление" : "Редактирование недоступно"}
                             >
+                              <i className="bi bi-pencil me-1"></i>
                               Редактировать
                             </button>
                             <button 
                               className={`btn ${isOrderEditable(order.status) ? 'btn-outline-danger' : 'btn-outline-secondary'} btn-animated`}
                               onClick={() => isOrderEditable(order.status) && handleDeleteOrder(order.id, order.status)}
-                              disabled={!isOrderEditable(order.status)}
+                              disabled={!isOrderEditable(order.status) || deletingOrderId === order.id}
+                              title={isOrderEditable(order.status) ? "Удалить объявление" : "Удаление недоступно"}
                             >
-                              Удалить
+                              {deletingOrderId === order.id ? (
+                                <>
+                                  <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                  Удаление...
+                                </>
+                              ) : (
+                                <>
+                                  <i className="bi bi-trash me-1"></i>
+                                  Удалить
+                                </>
+                              )}
                             </button>
                           </div>
                         </div>

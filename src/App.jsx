@@ -433,7 +433,8 @@ function App() {
     loginUser,
     logoutUser,
     registerUser,
-    updateUser
+    updateUser,
+    refreshPets: loadPets
   };
 
   const petsContextValue = {
