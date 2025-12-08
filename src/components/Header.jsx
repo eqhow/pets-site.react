@@ -1,5 +1,5 @@
-import React, { useState, useContext, useEffect, useRef } from "react";
-import { AuthContext, PetsContext, AlertContext } from '../App';
+import React, { useState, useContext, useEffect, useRef, useCallback } from "react";
+import { AuthContext, PetsContext } from '../App';
 import '../assets/css/style.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
@@ -10,7 +10,6 @@ import { api } from '../api';
 function Header() {
   const { isLoggedIn, user, logoutUser } = useContext(AuthContext);
   const { filterPets } = useContext(PetsContext);
-  const { showAlert } = useContext(AlertContext);
   const navigate = useNavigate();
   const searchRef = useRef(null);
   const inputRef = useRef(null);
@@ -24,7 +23,7 @@ function Header() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
   // Функция для получения подсказок с API
-  const fetchSuggestions = async (query) => {
+  const fetchSuggestions = useCallback(async (query) => {
     if (!query.trim()) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -68,7 +67,7 @@ function Header() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Генерация моковых подсказок (если API не работает)
   const generateMockSuggestions = (query) => {
@@ -121,7 +120,7 @@ function Header() {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [searchTerm]);
+  }, [searchTerm, fetchSuggestions]);
 
   // Закрытие подсказок при клике вне
   useEffect(() => {
@@ -167,6 +166,9 @@ function Header() {
         
       case 'Escape':
         setShowSuggestions(false);
+        break;
+      default:
+        // Обработка других клавиш не требуется
         break;
     }
   };

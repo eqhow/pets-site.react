@@ -8,7 +8,7 @@ import { api, getImageUrl } from '../../api';
 import PetCard from '../PetCard';
 
 function Home() {
-  const { sliderPets, allPets, loadPets } = useContext(PetsContext);
+  const { sliderPets, allPets } = useContext(PetsContext);
   const { showAlert } = useContext(AlertContext);
   const [recentPets, setRecentPets] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);

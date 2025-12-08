@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext, AlertContext } from '../../App';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -30,11 +30,7 @@ function Card() {
   const [editLoading, setEditLoading] = useState(false);
 
   // Загрузка данных животного
-  useEffect(() => {
-    loadPet();
-  }, [id]);
-
-  const loadPet = async () => {
+  const loadPet = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.getPet(id);
@@ -90,7 +86,11 @@ function Card() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, isLoggedIn, user, navigate, showAlert]);
+
+  useEffect(() => {
+    loadPet();
+  }, [loadPet]);
 
   // Обработчик контакта
   const handleContact = (method) => {

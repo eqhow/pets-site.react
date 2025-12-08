@@ -46,6 +46,45 @@ function App() {
   // Состояние уведомлений
   const [alerts, setAlerts] = useState([]);
 
+  // Функция загрузки животных
+  const loadPets = useCallback(async () => {
+    try {
+      // Загружаем слайдер
+      const sliderResponse = await api.getSlider();
+      const sliderPets = (sliderResponse.data?.pets || []).map(processPetData);
+
+      // Загружаем все животные
+      const petsResponse = await api.getPets();
+      const allPets = (petsResponse.data?.orders || []).map(processPetData);
+
+      // Сортируем по дате (сначала новые)
+      const sortedPets = [...allPets].sort((a, b) => {
+        try {
+          if (!a.date || !b.date) return 0;
+          const dateA = new Date(b.date.split('.').reverse().join('-'));
+          const dateB = new Date(a.date.split('.').reverse().join('-'));
+          return dateA.getTime() - dateB.getTime();
+        } catch {
+          return 0;
+        }
+      });
+
+      setPets(prev => ({
+        ...prev,
+        allPets: sortedPets,
+        sliderPets: sliderPets,
+        filteredPets: sortedPets,
+        pagination: {
+          ...prev.pagination,
+          totalPages: Math.ceil(sortedPets.length / prev.pagination.itemsPerPage)
+        }
+      }));
+    } catch (error) {
+      console.error('Ошибка загрузки животных:', error);
+      showAlert('Ошибка загрузки данных', 'danger');
+    }
+  }, []);
+
   // Проверка авторизации при загрузке
   useEffect(() => {
     const checkAuth = async () => {
@@ -107,53 +146,12 @@ function App() {
     
     checkAuth();
     loadPets();
-  }, []);
-
-  const loadPets = async () => {
-    try {
-      // Загружаем слайдер
-      const sliderResponse = await api.getSlider();
-      const sliderPets = (sliderResponse.data?.pets || []).map(processPetData);
-
-      // Загружаем все животные
-      const petsResponse = await api.getPets();
-      const allPets = (petsResponse.data?.orders || []).map(processPetData);
-
-      // Сортируем по дате (сначала новые)
-      const sortedPets = [...allPets].sort((a, b) => {
-        try {
-          if (!a.date || !b.date) return 0;
-          const dateA = new Date(b.date.split('.').reverse().join('-'));
-          const dateB = new Date(a.date.split('.').reverse().join('-'));
-          return dateA.getTime() - dateB.getTime();
-        } catch {
-          return 0;
-        }
-      });
-
-      setPets(prev => ({
-        ...prev,
-        allPets: sortedPets,
-        sliderPets: sliderPets,
-        filteredPets: sortedPets,
-        pagination: {
-          ...prev.pagination,
-          totalPages: Math.ceil(sortedPets.length / prev.pagination.itemsPerPage)
-        }
-      }));
-    } catch (error) {
-      console.error('Ошибка загрузки животных:', error);
-      showAlert('Ошибка загрузки данных', 'danger');
-    }
-  };
+  }, [loadPets]);
 
   // Функции авторизации
   const loginUser = async (identifier, password) => {
     try {
       console.log('Попытка входа:', { identifier, password });
-      
-      // Определяем, что ввел пользователь: email или телефон
-      const isEmail = identifier.includes('@');
       
       // Используем правильный метод API
       const response = await api.login(identifier, password);

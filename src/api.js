@@ -118,7 +118,7 @@ async function fetchAPI(endpoint, options = {}) {
           const errors = responseData.error.errors;
           let errorMessages = [];
           
-          for (const [field, fieldErrors] of Object.entries(errors)) {
+          for (const [, fieldErrors] of Object.entries(errors)) {
             if (Array.isArray(fieldErrors)) {
               errorMessages.push(...fieldErrors);
             } else {

@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from '../../api';
 
 function AddPet() {
-  const { user, isLoggedIn, registerUser, loginUser } = useContext(AuthContext);
+  const { user, isLoggedIn, loginUser } = useContext(AuthContext);
   const { showAlert } = useContext(AlertContext);
   const navigate = useNavigate();
 
@@ -145,12 +145,12 @@ function AddPet() {
     
     // Обязательные поля
     if (!formData.name.trim()) newErrors.name = 'Имя обязательно';
-    else if (!/^[А-Яа-яЁё\s\-]+$/.test(formData.name)) {
+    else if (!/^[А-Яа-яЁё\s-]+$/.test(formData.name)) {
       newErrors.name = 'Имя должно содержать только кириллицу, пробелы и дефисы';
     }
     
     if (!formData.phone.trim()) newErrors.phone = 'Телефон обязателен';
-    else if (!/^[\+\d]+$/.test(formData.phone)) {
+    else if (!/^[+\d]+$/.test(formData.phone)) {
       newErrors.phone = 'Телефон должен содержать только цифры и знак +';
     }
     
@@ -394,7 +394,7 @@ setTimeout(() => {
                         value={formData.name}
                         onChange={handleInputChange}
                         required
-                        pattern="[А-Яа-яЁё\s\-]+"
+                        pattern="[А-Яа-яЁё\s-]+"
                         placeholder="Иван Иванов"
                       />
                       {errors.name && <div className="invalid-feedback">{errors.name}</div>}
@@ -412,7 +412,7 @@ setTimeout(() => {
                         value={formData.phone}
                         onChange={handleInputChange}
                         required
-                        pattern="[\+\d]+"
+                        pattern="[+\d]+"
                         placeholder="+79111234567"
                       />
                       {errors.phone && <div className="invalid-feedback">{errors.phone}</div>}

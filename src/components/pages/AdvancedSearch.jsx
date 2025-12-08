@@ -10,10 +10,8 @@ function AdvancedSearch() {
   const { 
     filteredPets, 
     filters, 
-    pagination, 
     filterPets, 
-    resetFilters, 
-    setCurrentPage,
+    resetFilters,
     loadPets
   } = useContext(PetsContext);
   
