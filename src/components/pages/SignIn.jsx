@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { AuthContext, AlertContext } from '../../App'; // Изменено
+import { AuthContext, AlertContext } from '../../App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Link, useNavigate } from 'react-router-dom';
@@ -9,18 +9,15 @@ function SignIn() {
   const { showAlert } = useContext(AlertContext);
   const navigate = useNavigate();
   
-  // Состояние формы
   const [formData, setFormData] = useState({
     identifier: '',
     password: '',
     remember: false
   });
   
-  // Состояние ошибок
   const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false); // Добавьте это
+  const [loading, setLoading] = useState(false);
 
-  // Обработчик изменения полей
   const handleInputChange = (e) => {
     const { id, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -28,13 +25,11 @@ function SignIn() {
       [id]: type === 'checkbox' ? checked : value
     }));
     
-    // Очистка ошибки при вводе
     if (errors[id]) {
       setErrors(prev => ({ ...prev, [id]: '' }));
     }
   };
 
-  // Валидация формы
   const validateForm = () => {
     const newErrors = {};
     
@@ -50,7 +45,6 @@ function SignIn() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Обработчик отправки формы
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -58,12 +52,11 @@ function SignIn() {
       return;
     }
     
-    setLoading(true); // Добавьте это
+    setLoading(true);
     try {
       if (await loginUser(formData.identifier, formData.password)) {
         navigate('/profile');
         
-        // Сохранение в localStorage если выбрано "Запомнить меня"
         if (formData.remember) {
           localStorage.setItem('findpets_remember_login', 'true');
           localStorage.setItem('findpets_last_identifier', formData.identifier);
@@ -72,11 +65,10 @@ function SignIn() {
     } catch (error) {
       showAlert('Ошибка входа', 'danger');
     } finally {
-      setLoading(false); // Добавьте это
+      setLoading(false);
     }
   };
 
-  // Загрузка сохраненных данных при монтировании
   React.useEffect(() => {
     const remember = localStorage.getItem('findpets_remember_login');
     const lastIdentifier = localStorage.getItem('findpets_last_identifier');

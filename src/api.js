@@ -1,4 +1,5 @@
-// src/api.js
+// api.js - полностью переработанный
+
 const API_BASE_URL = 'https://pets.xn--80ahdri7a.site/api';
 const IMAGE_BASE_URL = 'https://pets.xn--80ahdri7a.site/storage/images';
 
@@ -6,37 +7,31 @@ const IMAGE_BASE_URL = 'https://pets.xn--80ahdri7a.site/storage/images';
 export const getImageUrl = (imagePath) => {
   if (!imagePath || imagePath === 'undefined' || imagePath === 'null') return null;
   
-  // Если уже полный URL
   if (imagePath.startsWith('http')) {
     return imagePath;
   }
   
-  // Если путь начинается с /storage/images, убираем эту часть
   if (imagePath.startsWith('/storage/images/')) {
     return `https://pets.xn--80ahdri7a.site${imagePath}`;
   }
   
-  // Если просто имя файла
   return `${IMAGE_BASE_URL}/${imagePath}`;
 };
 
-// Функция для обработки данных животных (добавление полных URL изображений)
+// Функция для обработки данных животных
 export const processPetData = (pet) => {
   if (!pet) return pet;
   
   const processed = { ...pet };
   
-  // Обработка основного изображения
   if (pet.image) {
     processed.image = getImageUrl(pet.image);
   }
   
-  // Обработка массива фотографий - исправлено для некорректных форматов
   processed.photos = [];
   
   if (pet.photos) {
     if (Array.isArray(pet.photos)) {
-      // Фильтруем некорректные значения и преобразуем в URL
       processed.photos = pet.photos
         .filter(photo => photo && 
                         typeof photo === 'string' && 
@@ -45,25 +40,21 @@ export const processPetData = (pet) => {
                         photo.trim() !== '')
         .map(photo => getImageUrl(photo));
     } else if (typeof pet.photos === 'string') {
-      // Если photos - строка с числами, разделенными запятыми
       const photoStrings = pet.photos.split(',').map(str => str.trim());
       processed.photos = photoStrings
         .filter(str => str && 
                       str !== 'undefined' && 
                       str !== 'null' && 
-                      !/^\d+$/.test(str)) // Исключаем чистые числа
+                      !/^\d+$/.test(str))
         .map(str => getImageUrl(str));
     }
   }
   
-  // Если нет ни image, ни photos, добавляем заглушку
   if (!processed.image && processed.photos.length === 0) {
     processed.image = 'https://via.placeholder.com/300x200?text=Нет+фото';
   }
   
-  // Форматируем дату для отображения
   if (processed.date) {
-    // Если дата в формате ДД-ММ-ГГГГ, преобразуем в ДД.ММ.ГГГГ
     if (processed.date.includes('-')) {
       processed.date = processed.date.split('-').join('.');
     }
@@ -72,11 +63,13 @@ export const processPetData = (pet) => {
   return processed;
 };
 
-// Функция для запросов с авторизацией
+// Улучшенная функция для запросов с таймаутом
 async function fetchAPI(endpoint, options = {}) {
   const token = localStorage.getItem('authToken');
+  
   const headers = {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
     ...options.headers,
   };
 
@@ -84,33 +77,94 @@ async function fetchAPI(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData)) {
-    options.body = JSON.stringify(options.body);
+  let body = options.body;
+  if (body && typeof body === 'object' && !(body instanceof FormData)) {
+    body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
+  console.log('Отправка запроса:', {
+    endpoint: `${API_BASE_URL}${endpoint}`,
+    method: options.method || 'GET',
     headers,
+    body: body ? JSON.parse(body) : null
   });
 
-  // Если неавторизован и запрос требует авторизации
-  if (response.status === 401 && token) {
-    // Токен истек или невалиден
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
-    window.location.href = '/sign-in';
-    throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
-  }
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+      body,
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Ошибка ${response.status}`);
-  }
+    const responseText = await response.text();
+    console.log('Сырой ответ сервера:', responseText);
+    console.log('Статус ответа:', response.status);
 
-  return response.json();
+    let responseData;
+    try {
+      responseData = responseText ? JSON.parse(responseText) : {};
+      console.log('Парсинг JSON успешен:', responseData);
+    } catch (parseError) {
+      console.error('Ошибка парсинга JSON:', parseError);
+      responseData = { message: 'Invalid JSON response' };
+    }
+
+    // Обрабатываем различные статусы ответа
+    if (response.status === 401 && token) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+      window.location.href = '/sign-in';
+      throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+    }
+
+    if (!response.ok) {
+      // Детали ошибки валидации 422
+      if (response.status === 422) {
+        console.error('Ошибка 422, детали:', responseData);
+        
+        if (responseData.error && responseData.error.errors) {
+          // Форматируем ошибки валидации
+          const errors = responseData.error.errors;
+          let errorMessages = [];
+          
+          for (const [field, fieldErrors] of Object.entries(errors)) {
+            if (Array.isArray(fieldErrors)) {
+              errorMessages.push(...fieldErrors);
+            } else {
+              errorMessages.push(fieldErrors);
+            }
+          }
+          
+          throw new Error(`Ошибка валидации: ${errorMessages.join(', ')}`);
+        } else if (responseData.error && responseData.error.message) {
+          throw new Error(responseData.error.message);
+        } else if (responseData.message) {
+          throw new Error(responseData.message);
+        }
+      }
+      
+      // Общая обработка ошибок
+      const errorMessage = responseData.error?.message || 
+                          responseData.message || 
+                          `Ошибка ${response.status}: ${response.statusText}`;
+      throw new Error(errorMessage);
+    }
+
+    // Возвращаем успешный ответ
+    return responseData;
+
+  } catch (error) {
+    console.error('Ошибка fetchAPI:', error);
+    
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Ошибка сети. Проверьте подключение к интернету.');
+    }
+    
+    throw error;
+  }
 }
 
-// Функция для загрузки файлов (multipart/form-data)
+// Функция для загрузки файлов
 async function fetchAPIWithFormData(endpoint, formData, options = {}) {
   const token = localStorage.getItem('authToken');
   const headers = {};
@@ -119,39 +173,86 @@ async function fetchAPIWithFormData(endpoint, formData, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    method: options.method || 'POST',
-    body: formData,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд для загрузки файлов
 
-  // Если неавторизован и запрос требует авторизации
-  if (response.status === 401 && token) {
-    // Токен истек или невалиден
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
-    window.location.href = '/sign-in';
-    throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      method: options.method || 'POST',
+      body: formData,
+      headers,
+      signal: controller.signal,
+      mode: 'cors',
+      credentials: 'omit',
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.status === 401 && token) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+      window.location.href = '/sign-in';
+      throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+    }
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { message: `Ошибка ${response.status}: ${response.statusText}` };
+      }
+      throw new Error(errorData.message || `Ошибка ${response.status}: ${response.statusText}`);
+    }
+
+    try {
+      return await response.json();
+    } catch {
+      const text = await response.text();
+      return { data: text };
+    }
+
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (error.name === 'AbortError') {
+      throw new Error('Превышено время ожидания загрузки файла.');
+    } else if (error.message === 'Failed to fetch') {
+      throw new Error('Ошибка сети при загрузке файла.');
+    }
+    
+    throw error;
   }
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Ошибка ${response.status}`);
-  }
-
-  return response.json();
 }
 
 // API функции
 export const api = {
   // =================== ПОЛЬЗОВАТЕЛИ ===================
   
-  // Получить информацию о текущем пользователе
-  getCurrentUser: () => fetchAPI('/users/'),
+ // Получить информацию о текущем пользователе
+getCurrentUser: () => fetchAPI('/users/').then(response => {
+  console.log('Ответ от /users/ :', response);
   
-  // Получить информацию о конкретном пользователе
-  getUser: (id) => fetchAPI(`/users/${id}`),
+  // API может возвращать данные в разных форматах
+  if (response.data) {
+    // Если data - это объект с user
+    if (response.data.user && Array.isArray(response.data.user)) {
+      return { data: response.data.user[0] };
+    }
+    // Если data - это массив
+    else if (Array.isArray(response.data)) {
+      return { data: response.data[0] };
+    }
+    // Если data - это объект пользователя
+    else if (response.data.id) {
+      return response;
+    }
+  }
+  
+  // Если формат непонятен, возвращаем как есть
+  return response;
+}),
   
   // Обновить телефон пользователя
   updatePhone: (phone) => fetchAPI('/users/phone', {
@@ -189,9 +290,9 @@ export const api = {
   // Добавить нового питомца
   addPet: (formData) => fetchAPIWithFormData('/pets/new', formData),
   
-  // Обновить питомца
+  // Обновить питомца (редактирование)
   updatePet: (id, formData) => fetchAPIWithFormData(`/pets/${id}`, formData, {
-    method: 'PATCH',
+    method: 'POST',
   }),
   
   // =================== ПОИСК ===================
@@ -220,18 +321,42 @@ export const api = {
     body: credentials,
   }),
   
-  // Регистрация
-  register: (userData) => fetchAPI('/register', {
+  // Регистрация - УПРОЩЕННАЯ ВЕРСИЯ
+  register: (userData) => {
+  // Форматируем телефон - пробуем разные варианты
+  let phone = userData.phone || '';
+  
+  // Очищаем от всего кроме цифр
+  const digits = phone.replace(/\D/g, '');
+  
+  // Пробуем разные форматы
+  let formattedPhone = '';
+  if (digits.startsWith('7') || digits.startsWith('8')) {
+    formattedPhone = digits;
+  } else if (digits.length === 10) {
+    // Если 10 цифр, добавляем 7 в начало
+    formattedPhone = '7' + digits;
+  } else {
+    // Оставляем как есть
+    formattedPhone = digits;
+  }
+  
+  const preparedData = {
+    name: String(userData.name || '').trim(),
+    phone: formattedPhone,
+    email: String(userData.email || '').trim(),
+    password: String(userData.password || ''),
+    password_confirmation: String(userData.password_confirmation || ''),
+    confirm: userData.confirm ? 1 : 0
+  };
+  
+  console.log('Отправляемые данные регистрации:', preparedData);
+  
+  return fetchAPI('/register', {
     method: 'POST',
-    body: {
-      name: userData.name,
-      phone: userData.phone,
-      email: userData.email,
-      password: userData.password,
-      password_confirmation: userData.password,
-      confirm: userData.agree ? 1 : 0
-    },
-  }),
+    body: preparedData,
+  });
+},
   
   // =================== ПОДПИСКА ===================
   
@@ -261,29 +386,24 @@ export const api = {
 
 // Дополнительные вспомогательные функции
 export const auth = {
-  // Проверить авторизацию
   isAuthenticated: () => {
     return !!localStorage.getItem('authToken');
   },
   
-  // Получить токен
   getToken: () => {
     return localStorage.getItem('authToken');
   },
   
-  // Получить данные пользователя
   getUserData: () => {
     const userData = localStorage.getItem('userData');
     return userData ? JSON.parse(userData) : null;
   },
   
-  // Сохранить данные пользователя после входа
   setUserData: (token, userData) => {
     localStorage.setItem('authToken', token);
     localStorage.setItem('userData', JSON.stringify(userData));
   },
   
-  // Очистить данные авторизации
   clear: () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userData');
@@ -294,31 +414,34 @@ export const auth = {
 export const handleApiError = (error, context) => {
   console.error(`API Error in ${context}:`, error);
   
-  // Если это ошибка сети
   if (error.message === 'Failed to fetch') {
     return 'Ошибка сети. Проверьте подключение к интернету.';
   }
   
-  // Если неавторизован
+  if (error.message.includes('Превышено время ожидания')) {
+    return 'Сервер не отвечает. Попробуйте позже.';
+  }
+  
   if (error.message.includes('401')) {
     return 'Необходима авторизация. Пожалуйста, войдите в систему.';
   }
   
-  // Если доступ запрещен
   if (error.message.includes('403')) {
     return 'Доступ запрещен. У вас нет прав для выполнения этого действия.';
   }
   
-  // Если не найдено
   if (error.message.includes('404')) {
     return 'Запрашиваемый ресурс не найден.';
   }
   
-  // Если ошибка валидации
   if (error.message.includes('422')) {
-    return 'Ошибка валидации данных. Проверьте введенные данные.';
+    // Уже содержит детальное сообщение об ошибке валидации
+    return error.message;
   }
   
-  // Вернуть оригинальное сообщение об ошибке
+  if (error.message.includes('CORS')) {
+    return 'Ошибка доступа к серверу. Пожалуйста, сообщите администратору.';
+  }
+  
   return error.message || 'Произошла неизвестная ошибка';
 };

@@ -6,7 +6,7 @@ import 'bootstrap-icons/font/bootstrap-icons.css';
 import { api, getImageUrl } from '../../api';
 
 function Profile() {
-  const { isLoggedIn, user, updateUser } = useContext(AuthContext);
+  const { isLoggedIn, user, updateUser, logoutUser } = useContext(AuthContext);
   const { showAlert } = useContext(AlertContext);
   const navigate = useNavigate();
   
@@ -17,7 +17,6 @@ function Profile() {
   const [editValues, setEditValues] = useState({});
   const [uploadingImages, setUploadingImages] = useState({});
 
-  // Проверка авторизации и загрузка данных
   useEffect(() => {
     if (!isLoggedIn) {
       navigate('/sign-in');
@@ -26,67 +25,108 @@ function Profile() {
     loadUserData();
   }, [isLoggedIn, navigate]);
 
-  // Загрузка данных пользователя
   const loadUserData = async () => {
     try {
       setLoading(true);
       
-      // 1. Загружаем информацию о текущем пользователе
+      // 1. Загружаем информацию о текущем пользователе по токену
       const userResponse = await api.getCurrentUser();
-      const userData = userResponse.data;
+      console.log('Ответ от getCurrentUser (по токену):', userResponse);
       
-      // Расчет количества дней с регистрации
-      const registrationDate = new Date(userData.registrationDate);
-      const today = new Date();
-      const daysSinceRegistration = Math.floor((today - registrationDate) / (1000 * 60 * 60 * 24));
+      let userData = userResponse.data;
       
-      setUserInfo({
-        ...userData,
-        daysSinceRegistration
-      });
-      
-      // 2. Загружаем объявления текущего пользователя
-      const ordersResponse = await api.getUserOrders();
-      const orders = ordersResponse.data?.orders || ordersResponse.data || [];
-      
-      // Обрабатываем изображения в объявлениях
-      const processedOrders = orders.map(order => {
-        const processed = { ...order };
+      if (!userData) {
+        // Если API не вернул данные, используем данные из контекста
+        setUserInfo({
+          ...user,
+          daysSinceRegistration: 0
+        });
         
-        // Обработка основного изображения
-        if (order.image) {
-          processed.image = getImageUrl(order.image);
-        }
+        showAlert('Не удалось загрузить полные данные профиля', 'warning');
+      } else {
+        // Расчет количества дней с регистрации
+        const registrationDate = new Date(userData.registrationDate || userData.created_at || new Date());
+        const today = new Date();
+        const daysSinceRegistration = Math.floor((today - registrationDate) / (1000 * 60 * 60 * 24));
         
-        // Обработка массива фотографий
-        processed.photos = [];
-        if (order.photos) {
-          if (Array.isArray(order.photos)) {
-            processed.photos = order.photos
-              .filter(photo => photo && typeof photo === 'string')
-              .map(photo => getImageUrl(photo));
-          } else if (typeof order.photos === 'string') {
-            const photoStrings = order.photos.split(',').map(str => str.trim());
-            processed.photos = photoStrings
-              .filter(str => str && !/^\d+$/.test(str))
-              .map(str => getImageUrl(str));
+        // Объединяем данные из API с данными из контекста
+        const mergedUserData = {
+          ...user, // Данные из контекста (с авторизации)
+          ...userData, // Данные из API
+          daysSinceRegistration
+        };
+        
+        console.log('Объединенные данные пользователя:', mergedUserData);
+        
+        setUserInfo(mergedUserData);
+        
+        // Сохраняем обновленные данные в localStorage
+        localStorage.setItem('userData', JSON.stringify(mergedUserData));
+      }
+      
+      // 2. Загружаем объявления текущего пользователя по токену
+      try {
+        const ordersResponse = await api.getUserOrders();
+        console.log('Ответ от getUserOrders (по токену):', ordersResponse);
+        
+        const orders = ordersResponse.data?.orders || ordersResponse.data || [];
+        
+        // Обрабатываем изображения в объявлениях
+        const processedOrders = orders.map(order => {
+          const processed = { ...order };
+          
+          // Обработка основного изображения
+          if (order.image) {
+            processed.image = getImageUrl(order.image);
           }
-        }
+          
+          // Обработка массива фотографий
+          processed.photos = [];
+          if (order.photos) {
+            if (Array.isArray(order.photos)) {
+              processed.photos = order.photos
+                .filter(photo => photo && typeof photo === 'string')
+                .map(photo => getImageUrl(photo));
+            } else if (typeof order.photos === 'string') {
+              const photoStrings = order.photos.split(',').map(str => str.trim());
+              processed.photos = photoStrings
+                .filter(str => str && !/^\d+$/.test(str))
+                .map(str => getImageUrl(str));
+            }
+          }
+          
+          return processed;
+        });
         
-        return processed;
-      });
-      
-      setUserOrders(processedOrders);
+        setUserOrders(processedOrders);
+      } catch (ordersError) {
+        console.error('Ошибка загрузки объявлений:', ordersError);
+        setUserOrders([]);
+        showAlert('Не удалось загрузить объявления', 'warning');
+      }
       
     } catch (error) {
       console.error('Ошибка загрузки данных профиля:', error);
-      showAlert('Ошибка загрузки профиля: ' + error.message, 'danger');
+      
+      if (error.message.includes('401')) {
+        showAlert('Сессия истекла. Пожалуйста, войдите снова.', 'warning');
+        logoutUser();
+        navigate('/sign-in');
+      } else if (error.message.includes('404')) {
+        // Если профиль не найден, используем данные из контекста
+        setUserInfo({
+          ...user,
+          daysSinceRegistration: 0
+        });
+        showAlert('Профиль еще не создан на сервере', 'info');
+      } else {
+        showAlert('Ошибка загрузки профиля: ' + error.message, 'danger');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Обработчик изменения телефона
   const handlePhoneChange = async () => {
     const newPhone = editValues.phone?.trim();
     
@@ -101,25 +141,19 @@ function Profile() {
     }
     
     try {
-      await api.updatePhone(newPhone);
+      // Обновляем телефон через API (используется токен)
+      const response = await api.updatePhone(newPhone);
       
-      // Обновляем локальное состояние
-      const updatedUserInfo = { ...userInfo, phone: newPhone };
-      setUserInfo(updatedUserInfo);
-      
-      // Обновляем данные в контексте
-      const updatedUser = { ...user, phone: newPhone };
-      updateUser({ phone: newPhone });
-      localStorage.setItem('userData', JSON.stringify(updatedUser));
-      
-      showAlert('Номер телефона успешно обновлен', 'success');
-      setEditMode(prev => ({ ...prev, phone: false }));
+      if (response.data?.status === 'ok') {
+        setUserInfo(prev => ({ ...prev, phone: newPhone }));
+        setEditMode(prev => ({ ...prev, phone: false }));
+        showAlert('Телефон успешно обновлен', 'success');
+      }
     } catch (error) {
       showAlert('Ошибка обновления телефона: ' + error.message, 'danger');
     }
   };
 
-  // Обработчик изменения email
   const handleEmailChange = async () => {
     const newEmail = editValues.email?.trim();
     
@@ -136,27 +170,20 @@ function Profile() {
     }
     
     try {
-      await api.updateEmail(newEmail);
+      // Обновляем email через API (используется токен)
+      const response = await api.updateEmail(newEmail);
       
-      // Обновляем локальное состояние
-      const updatedUserInfo = { ...userInfo, email: newEmail };
-      setUserInfo(updatedUserInfo);
-      
-      // Обновляем данные в контексте
-      const updatedUser = { ...user, email: newEmail };
-      updateUser({ email: newEmail });
-      localStorage.setItem('userData', JSON.stringify(updatedUser));
-      
-      showAlert('Email успешно обновлен', 'success');
-      setEditMode(prev => ({ ...prev, email: false }));
+      if (response.data?.status === 'ok') {
+        setUserInfo(prev => ({ ...prev, email: newEmail }));
+        setEditMode(prev => ({ ...prev, email: false }));
+        showAlert('Email успешно обновлен', 'success');
+      }
     } catch (error) {
       showAlert('Ошибка обновления email: ' + error.message, 'danger');
     }
   };
 
-  // Обработчик удаления объявления
   const handleDeleteOrder = async (orderId, orderStatus) => {
-    // Проверяем можно ли удалять
     if (orderStatus !== 'active' && orderStatus !== 'onModeration') {
       showAlert('Можно удалять только активные объявления или на модерации', 'warning');
       return;
@@ -186,7 +213,6 @@ function Profile() {
     }
   };
 
-  // Обработчик начала редактирования объявления
   const startEditOrder = (order) => {
     if (order.status !== 'active' && order.status !== 'onModeration') {
       showAlert('Можно редактировать только активные объявления или на модерации', 'warning');
@@ -206,17 +232,16 @@ function Profile() {
     }));
   };
 
-  // Обработчик загрузки изображений
   const handleImageUpload = (orderId, field, file) => {
     if (!file) return;
     
-    // Проверяем тип файла
+    // Проверяем тип файла - только PNG
     if (!file.type.includes('png')) {
       showAlert('Загружайте только PNG изображения', 'warning');
       return;
     }
     
-    // Проверяем размер файла (например, максимум 5MB)
+    // Проверяем размер файла (максимум 5MB)
     if (file.size > 5 * 1024 * 1024) {
       showAlert('Размер файла не должен превышать 5MB', 'warning');
       return;
@@ -230,7 +255,6 @@ function Profile() {
       } 
     }));
     
-    // Сохраняем файл в состоянии
     setEditValues(prev => ({
       ...prev,
       [orderId]: {
@@ -239,7 +263,7 @@ function Profile() {
       }
     }));
     
-    // Завершаем загрузку
+    // Симуляция загрузки
     setTimeout(() => {
       setUploadingImages(prev => ({ 
         ...prev, 
@@ -252,18 +276,27 @@ function Profile() {
     }, 500);
   };
 
-  // Обработчик сохранения изменений объявления
   const handleSaveOrder = async (orderId) => {
     const orderData = editValues[orderId];
     
     if (!orderData) return;
     
+    // Проверяем, что photo1 есть (обязательное поле)
+    if (!orderData.photo1 && !userOrders.find(o => o.id === orderId)?.image) {
+      showAlert('Основное фото (photo1) обязательно для заполнения', 'warning');
+      return;
+    }
+    
     try {
       const formData = new FormData();
       
       // Добавляем поля для редактирования
-      if (orderData.mark !== undefined) formData.append('mark', orderData.mark);
-      if (orderData.description !== undefined) formData.append('description', orderData.description);
+      if (orderData.mark !== undefined) {
+        formData.append('mark', orderData.mark);
+      }
+      if (orderData.description !== undefined) {
+        formData.append('description', orderData.description);
+      }
       
       // Добавляем изображения
       if (orderData.photo1 instanceof File) {
@@ -287,8 +320,7 @@ function Profile() {
           if (orderData.mark !== undefined) updated.mark = orderData.mark;
           if (orderData.description !== undefined) updated.description = orderData.description;
           
-          // Здесь в реальном приложении нужно обновить изображения после ответа от сервера
-          // Для примела просто отмечаем, что объявление было обновлено
+          // Обновляем изображения (в реальном приложении нужно получить URL от сервера)
           updated.updated = true;
           
           return updated;
@@ -316,7 +348,6 @@ function Profile() {
     }
   };
 
-  // Обработчик отмены редактирования
   const cancelEditOrder = (orderId) => {
     setEditMode(prev => ({ ...prev, [orderId]: false }));
     setEditValues(prev => {
@@ -326,7 +357,6 @@ function Profile() {
     });
   };
 
-  // Обработчик изменения полей редактирования
   const handleEditChange = (orderId, field, value) => {
     setEditValues(prev => ({
       ...prev,
@@ -337,7 +367,6 @@ function Profile() {
     }));
   };
 
-  // Обработчик просмотра объявления
   const handleViewOrder = (orderId) => {
     navigate(`/pet/${orderId}`);
   };
@@ -390,10 +419,10 @@ function Profile() {
             <div className="row align-items-center">
               <div className="col-md-3 text-center">
                 <div className="profile-avatar mb-3">
-                  <i className="bi bi-person-circle"></i>
+                  <i className="bi bi-person-circle display-1 text-muted"></i>
                 </div>
                 <button 
-                  className="btn btn-outline-primary btn-sm"
+                  className="btn btn-primary btn-sm"
                   onClick={() => navigate('/add-pet')}
                 >
                   <i className="bi bi-plus-circle me-1"></i>
@@ -512,21 +541,21 @@ function Profile() {
                 {/* Статистика */}
                 <div className="row mt-4">
                   <div className="col-md-4 mb-3">
-                    <div className="stats-card p-3 rounded text-center">
+                    <div className="bg-primary p-3 rounded text-center">
                       <h5 className="text-white mb-2">Объявления</h5>
                       <h2 className="text-white mb-0">{userInfo?.ordersCount || 0}</h2>
                       <small className="text-white opacity-75">Всего создано</small>
                     </div>
                   </div>
                   <div className="col-md-4 mb-3">
-                    <div className="stats-card p-3 rounded text-center">
+                    <div className="bg-success p-3 rounded text-center">
                       <h5 className="text-white mb-2">Найдено хозяев</h5>
                       <h2 className="text-white mb-0">{userInfo?.petsCount || 0}</h2>
                       <small className="text-white opacity-75">Успешно завершено</small>
                     </div>
                   </div>
                   <div className="col-md-4 mb-3">
-                    <div className="stats-card p-3 rounded text-center">
+                    <div className="bg-info p-3 rounded text-center">
                       <h5 className="text-white mb-2">Активных</h5>
                       <h2 className="text-white mb-0">{groupedOrders.active.length || 0}</h2>
                       <small className="text-white opacity-75">Текущие объявления</small>
@@ -579,8 +608,8 @@ function Profile() {
                       </div>
                       
                       <div className="table-responsive">
-                        <table className="table table-hover table-striped">
-                          <thead className="table-dark">
+                        <table className="table table-hover">
+                          <thead className="table-light">
                             <tr>
                               <th style={{ width: '100px' }}>Фото</th>
                               <th>Информация</th>
@@ -600,7 +629,7 @@ function Profile() {
                                     {isEditing ? (
                                       <div>
                                         <div className="mb-2">
-                                          <small className="d-block mb-1 text-muted">Основное фото:</small>
+                                          <small className="d-block mb-1 text-muted">Основное фото (обязательно):</small>
                                           <input
                                             type="file"
                                             className="form-control form-control-sm"
