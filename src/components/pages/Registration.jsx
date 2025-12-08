@@ -21,30 +21,13 @@ function Registration() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // Простая валидация
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.name.trim()) newErrors.name = 'Имя обязательно';
-    if (!formData.phone.trim()) newErrors.phone = 'Телефон обязателен';
-    if (!formData.email.trim()) newErrors.email = 'Email обязателен';
-    if (!formData.password) newErrors.password = 'Пароль обязателен';
-    if (!formData.confirmPassword) newErrors.confirmPassword = 'Подтверждение пароля обязательно';
-    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Пароли не совпадают';
-    if (!formData.agree) newErrors.agree = 'Необходимо согласие на обработку персональных данных';
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Обработчик изменения полей
   const handleInputChange = (e) => {
     const { id, value, type, checked } = e.target;
     
-    // Для телефона оставляем только цифры и +
+    // Для телефона оставляем только цифры
     let processedValue = value;
     if (id === 'phone') {
-      processedValue = value.replace(/[^\d+]/g, '');
+      processedValue = value.replace(/\D/g, '');
     }
     
     setFormData(prev => ({
@@ -58,59 +41,98 @@ function Registration() {
     }
   };
 
-  // Обработчик отправки формы
+  const validateForm = () => {
+    const newErrors = {};
+    
+    // Валидация имени
+    if (!formData.name.trim()) {
+      newErrors.name = 'Имя обязательно';
+    } else if (!/^[а-яА-ЯёЁ\s-]+$/.test(formData.name)) {
+      newErrors.name = 'Имя должно содержать только кириллицу, пробелы и дефисы';
+    }
+    
+    // Валидация телефона
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Телефон обязателен';
+    } else if (formData.phone.replace(/\D/g, '').length < 11) {
+      newErrors.phone = 'Телефон должен содержать минимум 11 цифр';
+    }
+    
+    // Валидация email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email обязателен';
+    } else if (!emailRegex.test(formData.email)) {
+      newErrors.email = 'Введите корректный email адрес';
+    }
+    
+    // Валидация пароля
+    if (!formData.password) {
+      newErrors.password = 'Пароль обязателен';
+    } else if (formData.password.length < 7) {
+      newErrors.password = 'Пароль должен содержать минимум 7 символов';
+    } else if (!/\d/.test(formData.password)) {
+      newErrors.password = 'Пароль должен содержать хотя бы одну цифру';
+    } else if (!/[a-z]/.test(formData.password)) {
+      newErrors.password = 'Пароль должен содержать хотя бы одну строчную букву';
+    } else if (!/[A-Z]/.test(formData.password)) {
+      newErrors.password = 'Пароль должен содержать хотя бы одну заглавную букву';
+    }
+    
+    // Валидация подтверждения пароля
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Подтверждение пароля обязательно';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Пароли не совпадают';
+    }
+    
+    // Согласие
+    if (!formData.agree) {
+      newErrors.agree = 'Необходимо согласие на обработку персональных данных';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) {
-      showAlert('Пожалуйста, заполните все поля правильно', 'danger');
       return;
     }
 
     setLoading(true);
     
-    // Форматируем данные ТОЧНО как в примере из PDF
+    // Форматируем данные точно как ожидает API
     const userData = {
       name: formData.name.trim(),
-      phone: formData.phone.replace(/[^\d+]/g, ''), // Оставляем только цифры и +
+      phone: formData.phone.replace(/\D/g, ''), // Только цифры
       email: formData.email.trim().toLowerCase(),
       password: formData.password,
       password_confirmation: formData.confirmPassword,
-      confirm: formData.agree ? 1 : 0 // Должно быть число 1 (true) или 0 (false)
+      confirm: formData.agree ? 1 : 0
     };
     
-    console.log('Подготовленные данные для регистрации:', userData);
-    
-    // Проверяем, что данные соответствуют примеру из PDF
-    const expectedFormat = {
-      name: "Иван",
-      phone: "89001234567",
-      email: "user@user.ru",
-      password: "paSSword1",
-      password_confirmation: "paSSword1",
-      confirm: 1
-    };
-    
-    console.log('Ожидаемый формат из PDF:', expectedFormat);
-    console.log('Наши данные совпадают?', 
-      Object.keys(expectedFormat).every(key => {
-        if (key === 'confirm') {
-          return userData[key] === expectedFormat[key];
-        }
-        return typeof userData[key] === typeof expectedFormat[key];
-      })
-    );
+    console.log('Отправка данных регистрации:', userData);
 
     try {
-      const success = await registerUser(userData);
-      if (success) {
-        // Успешная регистрация
-        setTimeout(() => {
+      // Используем registerUser из AuthContext
+      const result = await registerUser(userData);
+      
+      if (result.success) {
+        if (result.autoLogin) {
+          // Автоматический вход успешен
+          navigate('/profile');
+        } else {
+          // Требуется ручной вход
+          showAlert('Регистрация успешна! Теперь войдите в систему.', 'success');
           navigate('/sign-in');
-        }, 2000);
+        }
       }
     } catch (error) {
-      console.error('Ошибка в Registration.jsx:', error);
+      console.error('Ошибка регистрации:', error);
+      // Ошибка уже обработана в registerUser
     } finally {
       setLoading(false);
     }
@@ -124,9 +146,6 @@ function Registration() {
             <div className="card">
               <div className="card-body p-4">
                 <h2 className="text-center mb-4">Регистрация</h2>
-                <p className="text-center text-muted mb-4">
-                  Все поля, отмеченные *, обязательны для заполнения
-                </p>
                 
                 <form id="registration-form" onSubmit={handleSubmit} noValidate>
                   <div className="mb-3">
@@ -139,7 +158,6 @@ function Registration() {
                       id="name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      placeholder="Иван"
                       required
                     />
                     {errors.name && (
@@ -160,14 +178,13 @@ function Registration() {
                       id="phone"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      placeholder="89001234567"
                       required
                     />
                     {errors.phone && (
                       <div className="invalid-feedback">{errors.phone}</div>
                     )}
                     <small className="form-text text-muted">
-                      Только цифры и знак + (например: 89001234567 или +79001234567)
+                      Только цифры, начинается с 7 или 8, минимум 11 цифр
                     </small>
                   </div>
                   
@@ -181,7 +198,6 @@ function Registration() {
                       id="email"
                       value={formData.email}
                       onChange={handleInputChange}
-                      placeholder="user@user.ru"
                       required
                     />
                     {errors.email && (
@@ -199,7 +215,6 @@ function Registration() {
                       id="password"
                       value={formData.password}
                       onChange={handleInputChange}
-                      placeholder="paSSword1"
                       required
                       minLength="7"
                     />
@@ -221,7 +236,6 @@ function Registration() {
                       id="confirmPassword"
                       value={formData.confirmPassword}
                       onChange={handleInputChange}
-                      placeholder="paSSword1"
                       required
                     />
                     {errors.confirmPassword && (

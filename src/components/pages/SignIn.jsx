@@ -49,21 +49,30 @@ function SignIn() {
     e.preventDefault();
     
     if (!validateForm()) {
+      showAlert('Заполните все обязательные поля', 'warning');
       return;
     }
     
     setLoading(true);
     try {
-      if (await loginUser(formData.identifier, formData.password)) {
-        navigate('/profile');
-        
+      console.log('Попытка входа с данными:', formData);
+      
+      // Используем loginUser из AuthContext
+      const success = await loginUser(formData.identifier, formData.password);
+      
+      if (success) {
+        console.log('Вход успешен, переход на профиль');
         if (formData.remember) {
           localStorage.setItem('findpets_remember_login', 'true');
           localStorage.setItem('findpets_last_identifier', formData.identifier);
         }
+        navigate('/profile');
+      } else {
+        console.log('Вход не удался');
       }
     } catch (error) {
-      showAlert('Ошибка входа', 'danger');
+      console.error('Ошибка в handleSubmit:', error);
+      // Ошибка уже обработана в loginUser
     } finally {
       setLoading(false);
     }
@@ -143,7 +152,12 @@ function SignIn() {
                     className="btn btn-primary w-100 mb-3 btn-animated"
                     disabled={loading}
                   >
-                    {loading ? 'Вход...' : 'Войти'}
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Вход...
+                      </>
+                    ) : 'Войти'}
                   </button>
                   
                   <div className="text-center">

@@ -53,17 +53,35 @@ function App() {
       if (token) {
         try {
           const userResponse = await api.checkAuth();
-          const userData = userResponse.data;
+          console.log('Проверка авторизации:', userResponse);
+          
+          let userData;
+          
+          // Обрабатываем разные форматы ответа
+          if (userResponse.data) {
+            userData = userResponse.data;
+          } else if (userResponse.id) {
+            userData = userResponse;
+          } else if (Array.isArray(userResponse) && userResponse.length > 0) {
+            userData = userResponse[0];
+          } else {
+            throw new Error('Данные пользователя не получены');
+          }
           
           // Расчет количества дней с регистрации
-          const registrationDate = new Date(userData.registrationDate);
-          const today = new Date();
-          const daysSinceRegistration = Math.floor((today - registrationDate) / (1000 * 60 * 60 * 24));
+          let daysSinceRegistration = 0;
+          if (userData.registrationDate) {
+            const registrationDate = new Date(userData.registrationDate);
+            const today = new Date();
+            daysSinceRegistration = Math.floor((today - registrationDate) / (1000 * 60 * 60 * 24));
+          }
           
           const updatedUserData = {
             ...userData,
             daysSinceRegistration
           };
+          
+          console.log('Обновленные данные пользователя:', updatedUserData);
           
           localStorage.setItem('userData', JSON.stringify(updatedUserData));
           
@@ -73,6 +91,7 @@ function App() {
             user: updatedUserData,
           });
         } catch (error) {
+          console.error('Ошибка проверки авторизации:', error);
           // Если токен невалиден, очищаем localStorage
           localStorage.removeItem('authToken');
           localStorage.removeItem('userData');
@@ -81,6 +100,7 @@ function App() {
             token: null,
             user: null,
           });
+          showAlert('Сессия истекла. Пожалуйста, войдите снова.', 'warning');
         }
       }
     };
@@ -102,9 +122,10 @@ function App() {
       // Сортируем по дате (сначала новые)
       const sortedPets = [...allPets].sort((a, b) => {
         try {
-          const dateA = new Date(b.date.split('-').reverse().join('-'));
-          const dateB = new Date(a.date.split('-').reverse().join('-'));
-          return dateA - dateB;
+          if (!a.date || !b.date) return 0;
+          const dateA = new Date(b.date.split('.').reverse().join('-'));
+          const dateB = new Date(a.date.split('.').reverse().join('-'));
+          return dateA.getTime() - dateB.getTime();
         } catch {
           return 0;
         }
@@ -121,6 +142,7 @@ function App() {
         }
       }));
     } catch (error) {
+      console.error('Ошибка загрузки животных:', error);
       showAlert('Ошибка загрузки данных', 'danger');
     }
   };
@@ -128,119 +150,181 @@ function App() {
   // Функции авторизации
   const loginUser = async (identifier, password) => {
     try {
+      console.log('Попытка входа:', { identifier, password });
+      
       // Определяем, что ввел пользователь: email или телефон
       const isEmail = identifier.includes('@');
       
-      const credentials = {
-        password: password
-      };
+      // Используем правильный метод API
+      const response = await api.login(identifier, password);
+      console.log('Ответ API при входе:', response);
       
-      if (isEmail) {
-        credentials.email = identifier;
+      // Проверяем наличие токена в разных форматах ответа
+      let token;
+      
+      if (response.data && response.data.token) {
+        token = response.data.token;
+      } else if (response.token) {
+        token = response.token;
+      } else if (response.data?.token) {
+        token = response.data.token;
       } else {
-        credentials.phone = identifier;
+        throw new Error('Токен не получен от сервера');
       }
       
-      const response = await api.login(credentials);
+      // Сохраняем токен
+      localStorage.setItem('authToken', token);
+      console.log('Токен сохранен:', token);
       
-      if (response.data?.token) {
-        const token = response.data.token;
-        localStorage.setItem('authToken', token);
+      // Получаем информацию о пользователе
+      try {
+        const userResponse = await api.getCurrentUser();
+        console.log('Данные пользователя:', userResponse);
         
-        // Получаем информацию о пользователе
-        try {
-          const userResponse = await api.getCurrentUser();
-          const userData = userResponse.data;
-          
-          // Расчет количества дней с регистрации
+        let userData;
+        
+        // Обрабатываем разные форматы ответа
+        if (userResponse.data && userResponse.data.id) {
+          userData = userResponse.data;
+        } else if (userResponse.id) {
+          userData = userResponse;
+        } else if (Array.isArray(userResponse) && userResponse.length > 0) {
+          userData = userResponse[0];
+        } else {
+          // Создаем базовые данные, если API не вернул
+          userData = {
+            id: 1,
+            name: identifier.includes('@') ? identifier.split('@')[0] : 'Пользователь',
+            phone: !identifier.includes('@') ? identifier : '',
+            email: identifier.includes('@') ? identifier : '',
+            registrationDate: new Date().toISOString()
+          };
+        }
+        
+        // Расчет количества дней с регистрации
+        let daysSinceRegistration = 0;
+        if (userData.registrationDate) {
           const registrationDate = new Date(userData.registrationDate);
           const today = new Date();
-          const daysSinceRegistration = Math.floor((today - registrationDate) / (1000 * 60 * 60 * 24));
-          
-          const updatedUserData = {
-            ...userData,
-            daysSinceRegistration
-          };
-          
-          localStorage.setItem('userData', JSON.stringify(updatedUserData));
-          
-          setAuth({
-            isLoggedIn: true,
-            token: token,
-            user: updatedUserData,
-          });
-          
-          showAlert('Вход выполнен успешно', 'success');
-          return true;
-        } catch (userError) {
-          // Если не удалось получить данные пользователя, все равно считаем вход успешным
-          const defaultUserData = {
-            id: 1,
-            name: 'Пользователь',
-            phone: identifier,
-            email: isEmail ? identifier : null,
-            registrationDate: new Date().toISOString(),
-            daysSinceRegistration: 0
-          };
-          
-          localStorage.setItem('userData', JSON.stringify(defaultUserData));
-          
-          setAuth({
-            isLoggedIn: true,
-            token: token,
-            user: defaultUserData,
-          });
-          
-          showAlert('Вход выполнен успешно', 'success');
-          return true;
+          daysSinceRegistration = Math.floor((today - registrationDate) / (1000 * 60 * 60 * 24));
         }
+        
+        const updatedUserData = {
+          ...userData,
+          daysSinceRegistration
+        };
+        
+        // Сохраняем данные пользователя
+        localStorage.setItem('userData', JSON.stringify(updatedUserData));
+        
+        // Обновляем состояние
+        setAuth({
+          isLoggedIn: true,
+          token: token,
+          user: updatedUserData,
+        });
+        
+        showAlert('Вход выполнен успешно!', 'success');
+        return true;
+      } catch (userError) {
+        console.error('Ошибка получения данных пользователя:', userError);
+        // Создаем базовые данные
+        const defaultUserData = {
+          id: 1,
+          name: identifier.includes('@') ? identifier.split('@')[0] : 'Пользователь',
+          phone: !identifier.includes('@') ? identifier : '',
+          email: identifier.includes('@') ? identifier : '',
+          registrationDate: new Date().toISOString(),
+          daysSinceRegistration: 0
+        };
+        
+        localStorage.setItem('userData', JSON.stringify(defaultUserData));
+        
+        setAuth({
+          isLoggedIn: true,
+          token: token,
+          user: defaultUserData,
+        });
+        
+        showAlert('Вход выполнен успешно!', 'success');
+        return true;
       }
-      return false;
     } catch (error) {
-      showAlert('Неверный логин или пароль', 'danger');
+      console.error('Ошибка входа:', error);
+      
+      // Определяем тип ошибки
+      let errorMessage = 'Ошибка входа';
+      
+      if (error.message.includes('401') || 
+          error.message.includes('Unauthorized') || 
+          error.message.includes('Unauthenticated')) {
+        errorMessage = 'Неверный логин или пароль';
+      } else if (error.message.includes('422')) {
+        errorMessage = 'Ошибка валидации данных';
+      } else if (error.message.includes('Failed to fetch')) {
+        errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+      } else {
+        errorMessage = error.message || 'Ошибка входа. Проверьте логин и пароль.';
+      }
+      
+      showAlert(errorMessage, 'danger');
       return false;
     }
   };
 
-  // App.jsx - исправленная функция registerUser
-
-const registerUser = async (userData) => {
-  try {
-    console.log('Данные для регистрации в App.jsx:', userData);
-    
-    const response = await api.register({
-      name: userData.name,
-      phone: userData.phone,
-      email: userData.email,
-      password: userData.password,
-      password_confirmation: userData.password_confirmation,
-      confirm: userData.confirm
-    });
-    
-    console.log('Ответ от сервера регистрации:', response);
-    
-    showAlert('Регистрация прошла успешно! Теперь вы можете войти в систему.', 'success');
-    return true;
-    
-  } catch (error) {
-    console.error('Полная ошибка регистрации:', error);
-    
-    // Более детальная обработка ошибок
-    let errorMessage = 'Ошибка регистрации';
-    
-    if (error.message.includes('422')) {
-      errorMessage = 'Ошибка валидации данных. Пожалуйста, проверьте:';
-      errorMessage += '\n- Формат телефона (только цифры)';
-      errorMessage += '\n- Пароль (минимум 7 символов, 1 цифра, 1 заглавная, 1 строчная буква)';
-      errorMessage += '\n- Email (правильный формат)';
-      errorMessage += '\n- Имя (только кириллица)';
-      errorMessage += '\n- Подтверждение пароля (должно совпадать)';
+  const registerUser = async (userData) => {
+    try {
+      console.log('Регистрация пользователя:', userData);
+      
+      const response = await api.register({
+        name: userData.name,
+        phone: userData.phone,
+        email: userData.email,
+        password: userData.password,
+        password_confirmation: userData.password_confirmation,
+        confirm: userData.confirm ? 1 : 0
+      });
+      
+      console.log('Ответ API при регистрации:', response);
+      
+      // Проверяем успешность регистрации
+      if (response.data && response.data.message) {
+        showAlert(response.data.message, 'success');
+      } else if (response.status === 'ok' || response.message === 'Registration successful') {
+        showAlert('Регистрация прошла успешно', 'success');
+      } else {
+        showAlert('Регистрация прошла успешно', 'success');
+      }
+      
+      // Пытаемся автоматически войти
+      try {
+        const loginSuccess = await loginUser(userData.email, userData.password);
+        return { success: true, autoLogin: loginSuccess };
+      } catch (loginError) {
+        console.log('Автоматический вход не удался, требуется ручной вход');
+        return { success: true, autoLogin: false };
+      }
+      
+    } catch (error) {
+      console.error('Ошибка регистрации:', error);
+      
+      // Более подробная обработка ошибок
+      let errorMessage = 'Ошибка регистрации';
+      
+      if (error.message.includes('422')) {
+        errorMessage = 'Ошибка валидации данных. Проверьте введенные данные.';
+      } else if (error.message.includes('400')) {
+        errorMessage = 'Неверный запрос. Проверьте формат данных.';
+      } else if (error.message.includes('409') || error.message.includes('already exists')) {
+        errorMessage = 'Пользователь с таким email или телефоном уже существует.';
+      } else {
+        errorMessage = error.message || 'Ошибка регистрации';
+      }
+      
+      showAlert(errorMessage, 'danger');
+      throw error;
     }
-    
-    showAlert(errorMessage, 'danger');
-    return false;
-  }
-};
+  };
 
   const logoutUser = () => {
     localStorage.removeItem('authToken');
@@ -251,7 +335,7 @@ const registerUser = async (userData) => {
   };
 
   const updateUser = async (updates) => {
-    if (!auth.user) return;
+    if (!auth.user) return false;
     
     try {
       if (updates.phone !== undefined) {
@@ -266,9 +350,10 @@ const registerUser = async (userData) => {
       localStorage.setItem('userData', JSON.stringify(updatedUser));
       setAuth(prev => ({ ...prev, user: updatedUser }));
       
-      showAlert('Данные обновлены', 'success');
+      showAlert('Данные успешно обновлены', 'success');
       return true;
     } catch (error) {
+      console.error('Ошибка обновления данных пользователя:', error);
       showAlert('Ошибка обновления данных: ' + error.message, 'danger');
       return false;
     }
@@ -281,8 +366,11 @@ const registerUser = async (userData) => {
       if (filters.district) params.district = filters.district;
       if (filters.kind) params.kind = filters.kind;
       
+      console.log('Поиск с параметрами:', params);
       const response = await api.advancedSearch(params);
       const filtered = (response.data?.orders || []).map(processPetData);
+      
+      console.log('Найдено животных:', filtered.length);
       
       setPets(prev => ({
         ...prev,
@@ -295,7 +383,8 @@ const registerUser = async (userData) => {
         }
       }));
     } catch (error) {
-      showAlert('Ошибка поиска', 'danger');
+      console.error('Ошибка поиска:', error);
+      showAlert('Ошибка поиска: ' + error.message, 'danger');
     }
   }, []);
 
@@ -320,10 +409,20 @@ const registerUser = async (userData) => {
   }, []);
 
   // Функции для уведомлений
-  const showAlert = (message, type = 'danger') => {
+  const showAlert = (message, type = 'info') => {
     const id = Date.now();
-    setAlerts(prev => [...prev, { id, message, type }]);
+    const newAlert = { id, message, type };
     
+    setAlerts(prev => {
+      // Ограничиваем количество уведомлений
+      const updatedAlerts = [...prev, newAlert];
+      if (updatedAlerts.length > 3) {
+        return updatedAlerts.slice(-3);
+      }
+      return updatedAlerts;
+    });
+    
+    // Автоматическое удаление через 5 секунд
     setTimeout(() => {
       setAlerts(prev => prev.filter(alert => alert.id !== id));
     }, 5000);

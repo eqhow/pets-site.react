@@ -1,4 +1,4 @@
-// api.js - полностью переработанный
+// api.js - полностью исправленная версия
 
 const API_BASE_URL = 'https://pets.xn--80ahdri7a.site/api';
 const IMAGE_BASE_URL = 'https://pets.xn--80ahdri7a.site/storage/images';
@@ -33,19 +33,12 @@ export const processPetData = (pet) => {
   if (pet.photos) {
     if (Array.isArray(pet.photos)) {
       processed.photos = pet.photos
-        .filter(photo => photo && 
-                        typeof photo === 'string' && 
-                        photo !== 'undefined' && 
-                        photo !== 'null' && 
-                        photo.trim() !== '')
+        .filter(photo => photo && typeof photo === 'string')
         .map(photo => getImageUrl(photo));
     } else if (typeof pet.photos === 'string') {
       const photoStrings = pet.photos.split(',').map(str => str.trim());
       processed.photos = photoStrings
-        .filter(str => str && 
-                      str !== 'undefined' && 
-                      str !== 'null' && 
-                      !/^\d+$/.test(str))
+        .filter(str => str && !/^\d+$/.test(str))
         .map(str => getImageUrl(str));
     }
   }
@@ -63,7 +56,7 @@ export const processPetData = (pet) => {
   return processed;
 };
 
-// Улучшенная функция для запросов с таймаутом
+// Улучшенная функция для запросов с токеном
 async function fetchAPI(endpoint, options = {}) {
   const token = localStorage.getItem('authToken');
   
@@ -86,7 +79,7 @@ async function fetchAPI(endpoint, options = {}) {
     endpoint: `${API_BASE_URL}${endpoint}`,
     method: options.method || 'GET',
     headers,
-    body: body ? JSON.parse(body) : null
+    hasBody: !!body
   });
 
   try {
@@ -96,34 +89,32 @@ async function fetchAPI(endpoint, options = {}) {
       body,
     });
 
-    const responseText = await response.text();
-    console.log('Сырой ответ сервера:', responseText);
     console.log('Статус ответа:', response.status);
 
+    // Обрабатываем ответ
+    const responseText = await response.text();
     let responseData;
+    
     try {
       responseData = responseText ? JSON.parse(responseText) : {};
-      console.log('Парсинг JSON успешен:', responseData);
     } catch (parseError) {
-      console.error('Ошибка парсинга JSON:', parseError);
-      responseData = { message: 'Invalid JSON response' };
+      responseData = { message: responseText };
     }
 
-    // Обрабатываем различные статусы ответа
-    if (response.status === 401 && token) {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('userData');
-      window.location.href = '/sign-in';
-      throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+    // Если 401 - очищаем токен
+    if (response.status === 401) {
+      if (token) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userData');
+      }
+      throw new Error('Unauthenticated');
     }
 
+    // Проверяем, успешен ли ответ
     if (!response.ok) {
-      // Детали ошибки валидации 422
+      // Обработка ошибок валидации 422
       if (response.status === 422) {
-        console.error('Ошибка 422, детали:', responseData);
-        
-        if (responseData.error && responseData.error.errors) {
-          // Форматируем ошибки валидации
+        if (responseData.error?.errors) {
           const errors = responseData.error.errors;
           let errorMessages = [];
           
@@ -136,21 +127,13 @@ async function fetchAPI(endpoint, options = {}) {
           }
           
           throw new Error(`Ошибка валидации: ${errorMessages.join(', ')}`);
-        } else if (responseData.error && responseData.error.message) {
-          throw new Error(responseData.error.message);
-        } else if (responseData.message) {
-          throw new Error(responseData.message);
         }
       }
       
-      // Общая обработка ошибок
-      const errorMessage = responseData.error?.message || 
-                          responseData.message || 
-                          `Ошибка ${response.status}: ${response.statusText}`;
-      throw new Error(errorMessage);
+      throw new Error(responseData.message || `Ошибка ${response.status}: ${response.statusText}`);
     }
 
-    // Возвращаем успешный ответ
+    console.log('Успешный ответ:', responseData);
     return responseData;
 
   } catch (error) {
@@ -173,21 +156,13 @@ async function fetchAPIWithFormData(endpoint, formData, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд для загрузки файлов
-
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       method: options.method || 'POST',
       body: formData,
       headers,
-      signal: controller.signal,
-      mode: 'cors',
-      credentials: 'omit',
     });
-
-    clearTimeout(timeoutId);
 
     if (response.status === 401 && token) {
       localStorage.removeItem('authToken');
@@ -214,11 +189,7 @@ async function fetchAPIWithFormData(endpoint, formData, options = {}) {
     }
 
   } catch (error) {
-    clearTimeout(timeoutId);
-    
-    if (error.name === 'AbortError') {
-      throw new Error('Превышено время ожидания загрузки файла.');
-    } else if (error.message === 'Failed to fetch') {
+    if (error.message === 'Failed to fetch') {
       throw new Error('Ошибка сети при загрузке файла.');
     }
     
@@ -230,37 +201,31 @@ async function fetchAPIWithFormData(endpoint, formData, options = {}) {
 export const api = {
   // =================== ПОЛЬЗОВАТЕЛИ ===================
   
- // Получить информацию о текущем пользователе
-getCurrentUser: () => fetchAPI('/users/').then(response => {
-  console.log('Ответ от /users/ :', response);
-  
-  // API может возвращать данные в разных форматах
-  if (response.data) {
-    // Если data - это объект с user
-    if (response.data.user && Array.isArray(response.data.user)) {
-      return { data: response.data.user[0] };
-    }
-    // Если data - это массив
-    else if (Array.isArray(response.data)) {
-      return { data: response.data[0] };
-    }
-    // Если data - это объект пользователя
-    else if (response.data.id) {
+  // Получить информацию о текущем пользователе (по токену)
+  getCurrentUser: () => fetchAPI('/users').then(response => {
+    console.log('Ответ от /users (по токену):', response);
+    
+    // API может возвращать данные в разных форматах
+    if (response.data) {
+      if (Array.isArray(response.data)) {
+        return { data: response.data[0] || {} };
+      }
+      if (response.data.user && Array.isArray(response.data.user)) {
+        return { data: response.data.user[0] || {} };
+      }
       return response;
     }
-  }
+    
+    return { data: response || {} };
+  }),
   
-  // Если формат непонятен, возвращаем как есть
-  return response;
-}),
-  
-  // Обновить телефон пользователя
+  // Обновить телефон пользователя (по токену)
   updatePhone: (phone) => fetchAPI('/users/phone', {
     method: 'PATCH',
     body: { phone },
   }),
   
-  // Обновить email пользователя
+  // Обновить email пользователя (по токену)
   updateEmail: (email) => fetchAPI('/users/email', {
     method: 'PATCH',
     body: { email },
@@ -268,7 +233,7 @@ getCurrentUser: () => fetchAPI('/users/').then(response => {
   
   // =================== ОБЪЯВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ ===================
   
-  // Получить все объявления пользователя
+  // Получить все объявления пользователя (по токену)
   getUserOrders: () => fetchAPI('/users/orders'),
   
   // Удалить объявление пользователя
@@ -315,48 +280,44 @@ getCurrentUser: () => fetchAPI('/users/').then(response => {
   
   // =================== АВТОРИЗАЦИЯ ===================
   
-  // Вход
-  login: (credentials) => fetchAPI('/login', {
-    method: 'POST',
-    body: credentials,
-  }),
+  // Вход (email или телефон)
+  login: (identifier, password) => {
+    // Определяем, это email или телефон
+    const isEmail = identifier.includes('@');
+    
+    const body = isEmail 
+      ? { email: identifier, password }
+      : { phone: identifier, password };
+    
+    console.log('Данные для входа:', body);
+    
+    return fetchAPI('/login', {
+      method: 'POST',
+      body: body,
+    });
+  },
   
-  // Регистрация - УПРОЩЕННАЯ ВЕРСИЯ
+  // Регистрация
   register: (userData) => {
-  // Форматируем телефон - пробуем разные варианты
-  let phone = userData.phone || '';
-  
-  // Очищаем от всего кроме цифр
-  const digits = phone.replace(/\D/g, '');
-  
-  // Пробуем разные форматы
-  let formattedPhone = '';
-  if (digits.startsWith('7') || digits.startsWith('8')) {
-    formattedPhone = digits;
-  } else if (digits.length === 10) {
-    // Если 10 цифр, добавляем 7 в начало
-    formattedPhone = '7' + digits;
-  } else {
-    // Оставляем как есть
-    formattedPhone = digits;
-  }
-  
-  const preparedData = {
-    name: String(userData.name || '').trim(),
-    phone: formattedPhone,
-    email: String(userData.email || '').trim(),
-    password: String(userData.password || ''),
-    password_confirmation: String(userData.password_confirmation || ''),
-    confirm: userData.confirm ? 1 : 0
-  };
-  
-  console.log('Отправляемые данные регистрации:', preparedData);
-  
-  return fetchAPI('/register', {
-    method: 'POST',
-    body: preparedData,
-  });
-},
+    console.log('Получены данные для регистрации:', userData);
+    
+    // Форматируем данные для API
+    const preparedData = {
+      name: String(userData.name || '').trim(),
+      phone: (userData.phone || '').replace(/\D/g, ''), // Только цифры
+      email: String(userData.email || '').trim().toLowerCase(),
+      password: String(userData.password || ''),
+      password_confirmation: String(userData.password_confirmation || ''),
+      confirm: userData.confirm ? 1 : 0
+    };
+    
+    console.log('Отправляемые данные регистрации:', preparedData);
+    
+    return fetchAPI('/register', {
+      method: 'POST',
+      body: preparedData,
+    });
+  },
   
   // =================== ПОДПИСКА ===================
   
@@ -373,7 +334,7 @@ getCurrentUser: () => fetchAPI('/users/').then(response => {
     const token = localStorage.getItem('authToken');
     if (!token) return Promise.reject(new Error('Not authenticated'));
     
-    return fetchAPI('/users/');
+    return fetchAPI('/users');
   },
   
   // Выйти из системы (клиентская функция)
@@ -408,40 +369,4 @@ export const auth = {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userData');
   }
-};
-
-// Функция для обработки ошибок API
-export const handleApiError = (error, context) => {
-  console.error(`API Error in ${context}:`, error);
-  
-  if (error.message === 'Failed to fetch') {
-    return 'Ошибка сети. Проверьте подключение к интернету.';
-  }
-  
-  if (error.message.includes('Превышено время ожидания')) {
-    return 'Сервер не отвечает. Попробуйте позже.';
-  }
-  
-  if (error.message.includes('401')) {
-    return 'Необходима авторизация. Пожалуйста, войдите в систему.';
-  }
-  
-  if (error.message.includes('403')) {
-    return 'Доступ запрещен. У вас нет прав для выполнения этого действия.';
-  }
-  
-  if (error.message.includes('404')) {
-    return 'Запрашиваемый ресурс не найден.';
-  }
-  
-  if (error.message.includes('422')) {
-    // Уже содержит детальное сообщение об ошибке валидации
-    return error.message;
-  }
-  
-  if (error.message.includes('CORS')) {
-    return 'Ошибка доступа к серверу. Пожалуйста, сообщите администратору.';
-  }
-  
-  return error.message || 'Произошла неизвестная ошибка';
 };
