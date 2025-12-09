@@ -3,7 +3,7 @@ import React, { useState, useContext, useEffect, useRef, useCallback } from "rea
 import { Link, useNavigate } from "react-router-dom";
 import { NavDropdown } from "react-bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
-import "bootstrap/dist/js/bootstrap.bundle.min.js"; // обязательно для bootstrap JS API
+import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import { AuthContext, PetsContext } from "../App";
 import "../assets/css/style.css";
 import { api } from "../api";
