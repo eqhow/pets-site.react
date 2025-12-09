@@ -12,6 +12,7 @@ import AlertComponent from './components/AlertComponent';
 import './assets/css/style.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
+import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { api, processPetData } from './api';
 
@@ -447,6 +448,13 @@ function App() {
     alerts,
     showAlert
   };
+
+  useEffect(() => {
+  // Инициализация Bootstrap компонентов
+  if (typeof window !== 'undefined') {
+    require('bootstrap/dist/js/bootstrap.bundle.min.js');
+  }
+}, []);
 
   return (
     <AuthContext.Provider value={authContextValue}>

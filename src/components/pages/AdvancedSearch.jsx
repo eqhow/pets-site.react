@@ -1,4 +1,3 @@
-// AdvancedSearch.jsx
 import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { PetsContext, AlertContext } from '../../App';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -44,7 +43,7 @@ function AdvancedSearch() {
 
   // Когда изменяются filteredPets в контексте, обновляем локальные результаты
   useEffect(() => {
-    if (hasSearched && filteredPets.length > 0) {
+    if (hasSearched) {
       setLocalSearchResults(filteredPets);
       setLocalCurrentPage(1); // Сбрасываем на первую страницу при новом поиске
     }
@@ -282,95 +281,115 @@ function AdvancedSearch() {
                 Выберите район и/или укажите вид животного, чтобы увидеть результаты
               </p>
             </div>
-          ) : localSearchResults.length === 0 ? (
-            // Результатов не найдено после поиска
-            <div className="text-center py-5" id="no-results-state">
-              <div className="mb-4">
-                <i className="bi bi-search display-1 text-muted" />
-              </div>
-              <h4 className="text-muted mb-3">Ничего не найдено</h4>
-              <p className="text-muted">Попробуйте изменить параметры поиска</p>
-              <button
-                className="btn btn-outline-primary mt-3"
-                onClick={handleReset}
-              >
-                <i className="bi bi-arrow-clockwise me-2" />
-                Сбросить фильтры
-              </button>
-            </div>
           ) : (
-            // Есть результаты поиска
+            // После поиска
             <div id="search-results-container">
+              {/* Заголовок с количеством результатов */}
               <div className="d-flex justify-content-between align-items-center mb-4">
                 <h3 className="mb-0">Найдено животных: {localSearchResults.length}</h3>
-                <div className="text-muted">
-                  Страница {localCurrentPage} из {totalPages}
-                </div>
+                {totalPages > 0 && (
+                  <div className="text-muted">
+                    Страница {localCurrentPage} из {totalPages}
+                  </div>
+                )}
               </div>
               
-              <div className="row g-4" id="search-results">
-                {displayedPets.map(pet => {
-                  if (!pet || !pet.id) {
-                    console.warn('Пропущен питомец без id:', pet);
-                    return null;
-                  }
-                  
-                  return (
-                    <PetCard 
-                      key={pet.id} 
-                      pet={pet}
-                      noBorder={false}
-                      animatedButton={true}
-                    />
-                  );
-                })}
-              </div>
+              {/* Если результатов нет вообще */}
+              {localSearchResults.length === 0 ? (
+                <div className="text-center py-5" id="no-results-state">
+                  <div className="mb-4">
+                    <i className="bi bi-search display-1 text-muted" />
+                  </div>
+                  <h4 className="text-muted mb-3">Ничего не найдено</h4>
+                  <p className="text-muted">Попробуйте изменить параметры поиска</p>
+                  <button
+                    className="btn btn-outline-primary mt-3"
+                    onClick={handleReset}
+                  >
+                    <i className="bi bi-arrow-clockwise me-2" />
+                    Сбросить фильтры
+                  </button>
+                </div>
+              ) : (
+                // Если есть результаты
+                <>
+                  <div className="row g-4" id="search-results">
+                    {displayedPets.length === 0 ? (
+                      // Если на текущей странице нет животных (пагинация)
+                      <div className="col-12 text-center py-5">
+                        <div className="mb-4">
+                          <i className="bi bi-search display-1 text-muted" />
+                        </div>
+                        <h4 className="text-muted mb-3">На этой странице нет животных</h4>
+                        <p className="text-muted">Попробуйте перейти на другую страницу</p>
+                      </div>
+                    ) : (
+                      // Отображаем животных на текущей странице
+                      displayedPets.map(pet => {
+                        if (!pet || !pet.id) {
+                          console.warn('Пропущен питомец без id:', pet);
+                          return null;
+                        }
+                        
+                        return (
+                          <PetCard 
+                            key={pet.id} 
+                            pet={pet}
+                            noBorder={false}
+                            animatedButton={true}
+                          />
+                        );
+                      })
+                    )}
+                  </div>
 
-              {/* Пагинация */}
-              {totalPages > 1 && (
-                <nav className="mt-5" id="pagination-container">
-                  <ul className="pagination justify-content-center" id="pagination">
-                    <li className={`page-item ${localCurrentPage === 1 ? 'disabled' : ''}`}>
-                      <button
-                        className="page-link"
-                        onClick={() => handlePageChange(localCurrentPage - 1)}
-                        disabled={localCurrentPage === 1}
-                      >
-                        <i className="bi bi-chevron-left"></i>
-                      </button>
-                    </li>
-                    
-                    {getPaginationItems().map((item, index) => (
-                      item === '...' ? (
-                        <li key={`dots-${index}`} className="page-item disabled">
-                          <span className="page-link">...</span>
-                        </li>
-                      ) : (
-                        <li 
-                          key={item}
-                          className={`page-item ${localCurrentPage === item ? 'active' : ''}`}
-                        >
+                  {/* Пагинация - показываем только если есть что пагинировать */}
+                  {totalPages > 1 && (
+                    <nav className="mt-5" id="pagination-container">
+                      <ul className="pagination justify-content-center" id="pagination">
+                        <li className={`page-item ${localCurrentPage === 1 ? 'disabled' : ''}`}>
                           <button
                             className="page-link"
-                            onClick={() => handlePageChange(item)}
+                            onClick={() => handlePageChange(localCurrentPage - 1)}
+                            disabled={localCurrentPage === 1}
                           >
-                            {item}
+                            <i className="bi bi-chevron-left"></i>
                           </button>
                         </li>
-                      )
-                    ))}
-                    
-                    <li className={`page-item ${localCurrentPage === totalPages ? 'disabled' : ''}`}>
-                      <button
-                        className="page-link"
-                        onClick={() => handlePageChange(localCurrentPage + 1)}
-                        disabled={localCurrentPage === totalPages}
-                      >
-                        <i className="bi bi-chevron-right"></i>
-                      </button>
-                    </li>
-                  </ul>
-                </nav>
+                        
+                        {getPaginationItems().map((item, index) => (
+                          item === '...' ? (
+                            <li key={`dots-${index}`} className="page-item disabled">
+                              <span className="page-link">...</span>
+                            </li>
+                          ) : (
+                            <li 
+                              key={item}
+                              className={`page-item ${localCurrentPage === item ? 'active' : ''}`}
+                            >
+                              <button
+                                className="page-link"
+                                onClick={() => handlePageChange(item)}
+                              >
+                                {item}
+                              </button>
+                            </li>
+                          )
+                        ))}
+                        
+                        <li className={`page-item ${localCurrentPage === totalPages ? 'disabled' : ''}`}>
+                          <button
+                            className="page-link"
+                            onClick={() => handlePageChange(localCurrentPage + 1)}
+                            disabled={localCurrentPage === totalPages}
+                          >
+                            <i className="bi bi-chevron-right"></i>
+                          </button>
+                        </li>
+                      </ul>
+                    </nav>
+                  )}
+                </>
               )}
             </div>
           )}

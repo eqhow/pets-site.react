@@ -94,11 +94,6 @@ function Card() {
 
   // Обработчик контакта
   const handleContact = (method) => {
-    if (!isLoggedIn) {
-      navigate('/sign-in');
-      return;
-    }
-    
     if (!pet) return;
     
     if (method === 'call') {
@@ -725,7 +720,6 @@ function Card() {
                 <button 
                   className="btn btn-primary w-100 mb-2 btn-animated"
                   onClick={() => handleContact('call')}
-                  disabled={!isLoggedIn}
                 >
                   <i className="bi bi-telephone me-2" />
                   Позвонить
@@ -733,18 +727,10 @@ function Card() {
                 <button 
                   className="btn btn-outline-primary w-100 btn-animated"
                   onClick={() => handleContact('email')}
-                  disabled={!isLoggedIn}
                 >
                   <i className="bi bi-envelope me-2" />
                   Написать email
                 </button>
-                
-                {!isLoggedIn && (
-                  <div className="alert alert-info mt-3 mb-0">
-                    <i className="bi bi-info-circle me-2"></i>
-                    Для связи необходимо <Link to="/sign-in">войти в систему</Link>
-                  </div>
-                )}
               </div>
             </div>
           </div>
