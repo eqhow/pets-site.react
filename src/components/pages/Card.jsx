@@ -650,10 +650,6 @@ function Card() {
                             <span>{pet.kind}</span>
                           </li>
                           <li className="list-group-item d-flex justify-content-between">
-                            <span>Порода:</span>
-                            <span>{pet.breed || 'Не указано'}</span>
-                          </li>
-                          <li className="list-group-item d-flex justify-content-between">
                             <span>Клеймо/Чип:</span>
                             <span>{pet.mark || 'Не указано'}</span>
                           </li>
