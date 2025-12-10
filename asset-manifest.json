@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/pets-site.react/static/css/main.d40f5628.css",
-    "main.js": "/pets-site.react/static/js/main.5e40c9ed.js",
+    "main.js": "/pets-site.react/static/js/main.b54345c6.js",
     "static/media/bootstrap-icons.woff?": "/pets-site.react/static/media/bootstrap-icons.1295669cd4e305c97f2c.woff",
     "static/media/bootstrap-icons.woff2?": "/pets-site.react/static/media/bootstrap-icons.92ea18a81d737146ff04.woff2",
     "index.html": "/pets-site.react/index.html",
     "main.d40f5628.css.map": "/pets-site.react/static/css/main.d40f5628.css.map",
-    "main.5e40c9ed.js.map": "/pets-site.react/static/js/main.5e40c9ed.js.map"
+    "main.b54345c6.js.map": "/pets-site.react/static/js/main.b54345c6.js.map"
   },
   "entrypoints": [
     "static/css/main.d40f5628.css",
-    "static/js/main.5e40c9ed.js"
+    "static/js/main.b54345c6.js"
   ]
 }
